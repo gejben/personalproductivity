@@ -50,15 +50,16 @@ export interface HabitStats {
 
 interface HabitsContextType {
   habits: Habit[];
+  loading: boolean;
   addHabit: (habit: Omit<Habit, 'id' | 'createdAt' | 'completions'>) => void;
   updateHabit: (id: string, updates: Partial<Habit>) => void;
   deleteHabit: (id: string) => void;
-  toggleHabitCompletion: (habitId: string, date: Date) => void;
-  getHabitStats: (habitId: string) => HabitStats;
+  toggleHabitCompletion: (habitId: string, date?: Date) => void;
+  getHabitStats: (habit: Habit) => { completedCount: number; totalCount: number; completionRate: number };
   getHabitsForToday: () => Habit[];
   getCompletedHabitsForToday: () => Habit[];
   getRemainingHabitsForToday: () => Habit[];
-  getCompletionStatus: (habitId: string, date: Date) => boolean;
+  getCompletionStatus: (habit: Habit) => boolean;
 }
 
 const HabitsContext = createContext<HabitsContextType | undefined>(undefined);
@@ -225,10 +226,10 @@ export const HabitsProvider: React.FC<HabitsProviderProps> = ({ children }) => {
   };
 
   // Toggle completion status for a habit on a specific date
-  const toggleHabitCompletion = async (habitId: string, date: Date) => {
+  const toggleHabitCompletion = async (habitId: string, date?: Date) => {
     if (!currentUser) return;
     
-    const dateStr = formatDate(date);
+    const dateStr = date ? formatDate(date) : formatDate(new Date());
     const habitToUpdate = habits.find(h => h.id === habitId);
     
     if (!habitToUpdate) return;
@@ -325,28 +326,15 @@ export const HabitsProvider: React.FC<HabitsProviderProps> = ({ children }) => {
   };
 
   // Get completion status for a habit on a specific date
-  const getCompletionStatus = (habitId: string, date: Date): boolean => {
-    const habit = habits.find((h) => h.id === habitId);
-    if (!habit) return false;
-    
-    const dateStr = formatDate(date);
-    const completion = habit.completions.find((c) => c.date === dateStr);
+  const getCompletionStatus = (habit: Habit): boolean => {
+    const today = formatDate(new Date());
+    const completion = habit.completions.find((c) => c.date === today);
     
     return completion ? completion.completed : false;
   };
 
   // Calculate stats for a habit
-  const getHabitStats = (habitId: string): HabitStats => {
-    const habit = habits.find((h) => h.id === habitId);
-    if (!habit) {
-      return {
-        totalCompletions: 0,
-        currentStreak: 0,
-        longestStreak: 0,
-        completionRate: 0,
-      };
-    }
-
+  const getHabitStats = (habit: Habit): { completedCount: number; totalCount: number; completionRate: number } => {
     // Total completions
     const totalCompletions = habit.completions.filter((c) => c.completed).length;
 
@@ -450,9 +438,8 @@ export const HabitsProvider: React.FC<HabitsProviderProps> = ({ children }) => {
       : 0;
 
     return {
-      totalCompletions,
-      currentStreak,
-      longestStreak,
+      completedCount: daysCompleted,
+      totalCount: daysToComplete,
       completionRate,
     };
   };
@@ -461,6 +448,7 @@ export const HabitsProvider: React.FC<HabitsProviderProps> = ({ children }) => {
     <HabitsContext.Provider
       value={{
         habits,
+        loading,
         addHabit,
         updateHabit,
         deleteHabit,

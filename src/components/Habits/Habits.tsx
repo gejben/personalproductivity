@@ -31,7 +31,9 @@ import {
   ToggleButton,
   Tooltip,
   Stack,
-  SelectChangeEvent
+  SelectChangeEvent,
+  useTheme,
+  useMediaQuery
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -45,6 +47,7 @@ import {
 const Habits: React.FC = () => {
   const {
     habits,
+    loading,
     addHabit,
     updateHabit,
     deleteHabit,
@@ -55,6 +58,10 @@ const Habits: React.FC = () => {
     getRemainingHabitsForToday,
     getCompletionStatus,
   } = useHabits();
+
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [showAllHabits, setShowAllHabits] = useState(false);
@@ -242,11 +249,12 @@ const Habits: React.FC = () => {
         onClose={handleCancelEdit}
         fullWidth
         maxWidth="sm"
+        fullScreen={isMobile}
       >
-        <DialogTitle>
+        <DialogTitle sx={{ pb: 1 }}>
           {isEditing ? 'Edit Habit' : 'Add New Habit'}
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ pb: 1 }}>
           <Box component="form" onSubmit={isEditing ? handleUpdateHabit : handleAddHabit} sx={{ mt: 1 }}>
             <TextField
               margin="normal"
@@ -257,32 +265,32 @@ const Habits: React.FC = () => {
               name="name"
               value={formData.name}
               onChange={handleInputChange}
-              placeholder="e.g., Morning Exercise"
               autoFocus
+              sx={{ mb: 2 }}
             />
-
+            
             <TextField
               margin="normal"
               fullWidth
               id="description"
-              label="Description (Optional)"
+              label="Description"
               name="description"
               value={formData.description}
               onChange={handleInputChange}
-              placeholder="Describe your habit..."
               multiline
-              rows={3}
+              rows={2}
+              sx={{ mb: 2 }}
             />
-
-            <FormControl fullWidth margin="normal">
+            
+            <FormControl fullWidth margin="normal" sx={{ mb: 2 }}>
               <InputLabel id="frequency-type-label">Frequency</InputLabel>
               <Select
                 labelId="frequency-type-label"
                 id="frequencyType"
                 name="frequencyType"
                 value={formData.frequencyType}
-                onChange={handleSelectChange}
                 label="Frequency"
+                onChange={handleSelectChange}
               >
                 <MenuItem value="daily">Daily</MenuItem>
                 <MenuItem value="weekly">Weekly</MenuItem>
@@ -290,40 +298,66 @@ const Habits: React.FC = () => {
                 <MenuItem value="custom">Custom</MenuItem>
               </Select>
             </FormControl>
-
-            <TextField
-              margin="normal"
-              fullWidth
-              id="frequencyCount"
-              label={`Times per ${formData.frequencyType.slice(0, -2)}`}
-              name="frequencyCount"
-              type="number"
-              value={formData.frequencyCount}
-              onChange={handleInputChange}
-              inputProps={{ min: 1, max: 30 }}
-            />
-
+            
+            {formData.frequencyType !== 'custom' && (
+              <FormControl fullWidth margin="normal" sx={{ mb: 2 }}>
+                <InputLabel id="frequency-count-label">
+                  {formData.frequencyType === 'daily' 
+                    ? 'Times per day' 
+                    : formData.frequencyType === 'weekly' 
+                      ? 'Times per week' 
+                      : 'Times per month'}
+                </InputLabel>
+                <Select
+                  labelId="frequency-count-label"
+                  id="frequencyCount"
+                  name="frequencyCount"
+                  value={formData.frequencyCount.toString()}
+                  label={formData.frequencyType === 'daily' 
+                    ? 'Times per day' 
+                    : formData.frequencyType === 'weekly' 
+                      ? 'Times per week' 
+                      : 'Times per month'}
+                  onChange={handleSelectChange}
+                >
+                  {[...Array(30)].map((_, i) => (
+                    <MenuItem key={i + 1} value={(i + 1).toString()}>
+                      {i + 1}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+            
             {(formData.frequencyType === 'weekly' || formData.frequencyType === 'custom') && (
-              <FormControl fullWidth margin="normal">
-                <Typography variant="subtitle2" gutterBottom>
-                  Days of the Week
+              <FormControl fullWidth margin="normal" sx={{ mb: 2 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                  On which days?
                 </Typography>
                 <ToggleButtonGroup
                   value={formData.frequencyDays}
-                  onChange={(e, newDays) => {
+                  onChange={(_, newDays) => {
                     setFormData({
                       ...formData,
-                      frequencyDays: newDays as number[]
+                      frequencyDays: newDays,
                     });
                   }}
                   aria-label="days of week"
+                  sx={{ 
+                    flexWrap: 'wrap',
+                    justifyContent: 'center'
+                  }}
                 >
                   {getDayNames().map((day, index) => (
                     <ToggleButton 
                       key={day} 
                       value={index}
                       aria-label={day}
-                      sx={{ minWidth: 40 }}
+                      sx={{ 
+                        flex: isMobile ? '1 0 30%' : '1 0 14%',
+                        margin: '2px',
+                        padding: isMobile ? '6px 8px' : '8px 12px'
+                      }}
                     >
                       {day}
                     </ToggleButton>
@@ -331,37 +365,46 @@ const Habits: React.FC = () => {
                 </ToggleButtonGroup>
               </FormControl>
             )}
-
-            <TextField
-              margin="normal"
-              fullWidth
-              id="color"
-              label="Color"
-              name="color"
-              type="color"
-              value={formData.color}
-              onChange={handleInputChange}
-              sx={{ mt: 2 }}
-            />
+            
+            <FormControl fullWidth margin="normal" sx={{ mb: 2 }}>
+              <InputLabel id="color-label">Color</InputLabel>
+              <Select
+                labelId="color-label"
+                id="color"
+                name="color"
+                value={formData.color}
+                label="Color"
+                onChange={handleSelectChange}
+              >
+                <MenuItem value="#3498db">Blue</MenuItem>
+                <MenuItem value="#2ecc71">Green</MenuItem>
+                <MenuItem value="#e74c3c">Red</MenuItem>
+                <MenuItem value="#f39c12">Orange</MenuItem>
+                <MenuItem value="#9b59b6">Purple</MenuItem>
+                <MenuItem value="#1abc9c">Teal</MenuItem>
+                <MenuItem value="#34495e">Dark</MenuItem>
+              </Select>
+            </FormControl>
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCancelEdit}>Cancel</Button>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={handleCancelEdit} variant="outlined">Cancel</Button>
           <Button 
             onClick={isEditing ? handleUpdateHabit : handleAddHabit}
             variant="contained"
+            color="primary"
           >
-            {isEditing ? 'Update' : 'Add'} Habit
+            {isEditing ? 'Update' : 'Add Habit'}
           </Button>
         </DialogActions>
       </Dialog>
     );
   };
 
-  // Render habit item
-  const renderHabitItem = (habit: Habit) => {
-    const stats = getHabitStats(habit.id);
-    const isCompletedToday = getCompletionStatus(habit.id, new Date());
+  // Render habit card
+  const renderHabitCard = (habit: Habit) => {
+    const stats = getHabitStats(habit);
+    const isCompleted = getCompletionStatus(habit);
     
     return (
       <Card 
@@ -369,201 +412,322 @@ const Habits: React.FC = () => {
         sx={{ 
           mb: 2, 
           borderLeft: `4px solid ${habit.color}`,
-          opacity: habit.active ? 1 : 0.6
+          width: '100%'
         }}
       >
-        <CardContent>
+        <CardContent sx={{ pb: 1, pt: isMobile ? 1.5 : 2, px: isMobile ? 1.5 : 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <Box>
-              <Typography variant="h6" component="h3">
+              <Typography variant={isMobile ? "body1" : "h6"} component="h3" sx={{ fontWeight: 'bold' }}>
                 {habit.name}
               </Typography>
+              
               {habit.description && (
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                   {habit.description}
                 </Typography>
               )}
+              
               <Chip 
                 label={formatFrequency(habit)} 
                 size="small" 
-                sx={{ mt: 1, mr: 1 }}
+                sx={{ mt: 1, backgroundColor: `${habit.color}20` }}
               />
             </Box>
-            <Box>
-              <IconButton 
-                size="small" 
-                onClick={() => handleEditHabit(habit)}
-                color="primary"
-              >
-                <EditIcon fontSize="small" />
-              </IconButton>
-              <IconButton 
-                size="small" 
-                onClick={() => deleteHabit(habit.id)}
-                color="error"
-              >
-                <DeleteIcon fontSize="small" />
-              </IconButton>
+            
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+              <Box sx={{ display: 'flex' }}>
+                <Tooltip title="Edit">
+                  <IconButton 
+                    size="small" 
+                    onClick={() => handleEditHabit(habit)}
+                    sx={{ ml: 1 }}
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                
+                <Tooltip title="Delete">
+                  <IconButton 
+                    size="small" 
+                    onClick={() => deleteHabit(habit.id)}
+                    sx={{ ml: 1 }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+              
+              <Box sx={{ mt: 1, display: 'flex', alignItems: 'center' }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mr: 1 }}>
+                  {isCompleted ? 'Completed' : 'Mark as done'}
+                </Typography>
+                
+                <Tooltip title={isCompleted ? 'Mark as incomplete' : 'Mark as complete'}>
+                  <Checkbox
+                    checked={isCompleted}
+                    onChange={() => toggleHabitCompletion(habit.id)}
+                    icon={<CloseIcon />}
+                    checkedIcon={<CheckIcon />}
+                    sx={{
+                      color: 'text.disabled',
+                      '&.Mui-checked': {
+                        color: habit.color,
+                      },
+                    }}
+                  />
+                </Tooltip>
+              </Box>
             </Box>
           </Box>
           
-          <Box sx={{ mt: 2 }}>
-            <Grid container spacing={2}>
-              <Grid item xs={6} sm={3}>
-                <Typography variant="caption" color="text.secondary">
-                  Current Streak
-                </Typography>
-                <Typography variant="h6">
-                  {stats.currentStreak} days
-                </Typography>
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <Typography variant="caption" color="text.secondary">
-                  Longest Streak
-                </Typography>
-                <Typography variant="h6">
-                  {stats.longestStreak} days
-                </Typography>
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <Typography variant="caption" color="text.secondary">
-                  Completion Rate
-                </Typography>
-                <Typography variant="h6">
-                  {stats.completionRate}%
-                </Typography>
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <Typography variant="caption" color="text.secondary">
-                  Total Completions
-                </Typography>
-                <Typography variant="h6">
-                  {stats.totalCompletions}
-                </Typography>
-              </Grid>
-            </Grid>
-            
+          <Box sx={{ mt: 1 }}>
             <LinearProgress 
               variant="determinate" 
               value={stats.completionRate} 
-              sx={{ mt: 1, height: 8, borderRadius: 4 }}
+              sx={{ 
+                height: 8, 
+                borderRadius: 4,
+                backgroundColor: `${habit.color}20`,
+                '& .MuiLinearProgress-bar': {
+                  backgroundColor: habit.color,
+                }
+              }}
             />
+            
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                {stats.completedCount} / {stats.totalCount} completed
+              </Typography>
+              
+              <Typography variant="caption" color="text.secondary">
+                {stats.completionRate}%
+              </Typography>
+            </Box>
           </Box>
         </CardContent>
-        <CardActions>
-          <Button
-            startIcon={isCompletedToday ? <RefreshIcon /> : <CheckIcon />}
-            onClick={() => toggleHabitCompletion(habit.id, new Date())}
-            color={isCompletedToday ? "secondary" : "primary"}
-            variant={isCompletedToday ? "outlined" : "contained"}
-            fullWidth
-          >
-            {isCompletedToday ? 'Completed Today' : 'Mark Complete'}
-          </Button>
-        </CardActions>
       </Card>
     );
   };
 
-  // Get habits to display based on selected tab
-  const getDisplayedHabits = () => {
-    switch (tabValue) {
-      case 0: // Today's habits
-        return getHabitsForToday();
-      case 1: // All habits
-        return habits;
-      default:
-        return getHabitsForToday();
+  // Render habits list
+  const renderHabitsList = () => {
+    const habitsToShow = showAllHabits ? habits : getHabitsForToday();
+    
+    if (loading) {
+      return (
+        <Box sx={{ py: 4, textAlign: 'center' }}>
+          <LinearProgress />
+          <Typography variant="body1" sx={{ mt: 2 }}>
+            Loading habits...
+          </Typography>
+        </Box>
+      );
     }
-  };
-
-  return (
-    <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5" component="h2">
-          Habit Tracker
-        </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => setShowAddForm(true)}
-        >
-          Add Habit
-        </Button>
-      </Box>
-
-      <Paper sx={{ mb: 3 }}>
-        <Tabs
-          value={tabValue}
-          onChange={(e, newValue) => setTabValue(newValue)}
-          indicatorColor="primary"
-          textColor="primary"
-          variant="fullWidth"
-        >
-          <Tab label="Today's Habits" />
-          <Tab label="All Habits" />
-        </Tabs>
-      </Paper>
-
-      <Box sx={{ mb: 2 }}>
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={4}>
-            <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'primary.light', color: 'white' }}>
-              <Typography variant="h6">
-                {getHabitsForToday().length}
-              </Typography>
-              <Typography variant="body2">
-                Habits Today
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'success.light', color: 'white' }}>
-              <Typography variant="h6">
-                {getCompletedHabitsForToday().length}
-              </Typography>
-              <Typography variant="body2">
-                Completed
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'warning.light', color: 'white' }}>
-              <Typography variant="h6">
-                {getRemainingHabitsForToday().length}
-              </Typography>
-              <Typography variant="body2">
-                Remaining
-              </Typography>
-            </Paper>
-          </Grid>
-        </Grid>
-      </Box>
-
-      {getDisplayedHabits().length === 0 ? (
-        <Paper sx={{ p: 3, textAlign: 'center' }}>
+    
+    if (habitsToShow.length === 0) {
+      return (
+        <Box sx={{ py: 4, textAlign: 'center' }}>
           <Typography variant="body1" color="text.secondary">
-            {tabValue === 0 
-              ? "You don't have any habits scheduled for today." 
-              : "You haven't created any habits yet."}
+            {showAllHabits 
+              ? "You haven't created any habits yet." 
+              : "No habits scheduled for today."}
           </Typography>
           <Button
-            variant="outlined"
-            color="primary"
+            variant="contained"
             startIcon={<AddIcon />}
             onClick={() => setShowAddForm(true)}
             sx={{ mt: 2 }}
           >
             Add Your First Habit
           </Button>
-        </Paper>
-      ) : (
-        <Box>
-          {getDisplayedHabits().map(renderHabitItem)}
         </Box>
-      )}
+      );
+    }
+    
+    return (
+      <Grid container spacing={isMobile ? 1 : 2}>
+        {habitsToShow.map((habit) => (
+          <Grid item xs={12} sm={6} md={4} key={habit.id}>
+            {renderHabitCard(habit)}
+          </Grid>
+        ))}
+      </Grid>
+    );
+  };
 
+  // Render dashboard
+  const renderDashboard = () => {
+    const todayHabits = getHabitsForToday();
+    const completedHabits = getCompletedHabitsForToday();
+    const remainingHabits = getRemainingHabitsForToday();
+    const completionRate = todayHabits.length > 0 
+      ? Math.round((completedHabits.length / todayHabits.length) * 100) 
+      : 0;
+    
+    return (
+      <Box>
+        <Paper sx={{ p: isMobile ? 2 : 3, mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            Today's Progress
+          </Typography>
+          
+          <LinearProgress 
+            variant="determinate" 
+            value={completionRate} 
+            sx={{ height: 10, borderRadius: 5, mb: 2 }}
+          />
+          
+          <Grid container spacing={2}>
+            <Grid item xs={4}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" color="primary">
+                  {todayHabits.length}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Total
+                </Typography>
+              </Box>
+            </Grid>
+            
+            <Grid item xs={4}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" color="success.main">
+                  {completedHabits.length}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Completed
+                </Typography>
+              </Box>
+            </Grid>
+            
+            <Grid item xs={4}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" color="warning.main">
+                  {remainingHabits.length}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Remaining
+                </Typography>
+              </Box>
+            </Grid>
+          </Grid>
+        </Paper>
+        
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            Today's Habits
+          </Typography>
+          
+          {todayHabits.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              No habits scheduled for today.
+            </Typography>
+          ) : (
+            <Stack spacing={1}>
+              {todayHabits.map((habit) => {
+                const isCompleted = getCompletionStatus(habit);
+                
+                return (
+                  <Paper 
+                    key={habit.id} 
+                    sx={{ 
+                      p: 2, 
+                      display: 'flex', 
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      borderLeft: `4px solid ${habit.color}`,
+                    }}
+                  >
+                    <Box>
+                      <Typography variant="subtitle1">
+                        {habit.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {formatFrequency(habit)}
+                      </Typography>
+                    </Box>
+                    
+                    <Checkbox
+                      checked={isCompleted}
+                      onChange={() => toggleHabitCompletion(habit.id)}
+                      icon={<CloseIcon />}
+                      checkedIcon={<CheckIcon />}
+                      sx={{
+                        color: 'text.disabled',
+                        '&.Mui-checked': {
+                          color: habit.color,
+                        },
+                      }}
+                    />
+                  </Paper>
+                );
+              })}
+            </Stack>
+          )}
+        </Box>
+      </Box>
+    );
+  };
+
+  return (
+    <Box>
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        flexDirection: isMobile ? 'column' : 'row',
+        gap: isMobile ? 2 : 0,
+        mb: 3 
+      }}>
+        <Typography variant="h5" component="h1">
+          Habits Tracker
+        </Typography>
+        
+        <Box sx={{ 
+          display: 'flex', 
+          gap: 1,
+          width: isMobile ? '100%' : 'auto',
+          justifyContent: isMobile ? 'space-between' : 'flex-end'
+        }}>
+          <Button
+            variant={showAllHabits ? "outlined" : "contained"}
+            onClick={() => setShowAllHabits(!showAllHabits)}
+            startIcon={<RefreshIcon />}
+            size={isMobile ? "small" : "medium"}
+            sx={{ flex: isMobile ? 1 : 'none' }}
+          >
+            {showAllHabits ? "Today's Habits" : "All Habits"}
+          </Button>
+          
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => setShowAddForm(true)}
+            startIcon={<AddIcon />}
+            size={isMobile ? "small" : "medium"}
+            sx={{ flex: isMobile ? 1 : 'none' }}
+          >
+            Add Habit
+          </Button>
+        </Box>
+      </Box>
+      
+      <Box sx={{ mb: 3 }}>
+        <Tabs
+          value={tabValue}
+          onChange={(_, newValue) => setTabValue(newValue)}
+          variant={isMobile ? "fullWidth" : "standard"}
+        >
+          <Tab label="Habits" />
+          <Tab label="Dashboard" />
+        </Tabs>
+      </Box>
+      
+      <Box>
+        {tabValue === 0 ? renderHabitsList() : renderDashboard()}
+      </Box>
+      
       {renderHabitForm()}
     </Box>
   );

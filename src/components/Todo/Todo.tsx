@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useTodo, TodoItem } from '../../contexts/TodoContext';
+import { useTodo } from '../../contexts/TodoContext';
 import {
   Paper,
   Typography,
@@ -16,13 +16,17 @@ import {
   Divider,
   Card,
   CardContent,
-  CircularProgress
+  CircularProgress,
+  useMediaQuery,
+  useTheme
 } from '@mui/material';
 import { Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
 
 const Todo: React.FC = () => {
   const { todos, loading, addTodo, toggleTodo, deleteTodo } = useTodo();
   const [inputValue, setInputValue] = useState('');
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value);
@@ -44,12 +48,17 @@ const Todo: React.FC = () => {
 
   return (
     <Card>
-      <CardContent>
+      <CardContent sx={{ p: isMobile ? 2 : 3 }}>
         <Typography variant="h5" component="h2" gutterBottom>
           Todo List
         </Typography>
         
-        <Box sx={{ mb: 3, display: 'flex', gap: 1 }}>
+        <Box sx={{ 
+          mb: 3, 
+          display: 'flex', 
+          gap: 1,
+          flexDirection: isMobile ? 'column' : 'row'
+        }}>
           <TextField
             fullWidth
             variant="outlined"
@@ -66,6 +75,10 @@ const Todo: React.FC = () => {
             onClick={handleAddTodo}
             startIcon={<AddIcon />}
             disabled={loading}
+            sx={{ 
+              width: isMobile ? '100%' : 'auto',
+              mt: isMobile ? 1 : 0
+            }}
           >
             Add
           </Button>
@@ -73,7 +86,13 @@ const Todo: React.FC = () => {
         
         <Divider sx={{ mb: 2 }} />
         
-        <Paper elevation={0} sx={{ maxHeight: 400, overflow: 'auto' }}>
+        <Paper 
+          elevation={0} 
+          sx={{ 
+            maxHeight: isMobile ? 'calc(100vh - 300px)' : 400, 
+            overflow: 'auto' 
+          }}
+        >
           {loading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
               <CircularProgress size={24} />
@@ -98,13 +117,22 @@ const Todo: React.FC = () => {
                         aria-label="delete" 
                         onClick={() => deleteTodo(todo.id)}
                         color="error"
+                        sx={{ ml: isMobile ? 1 : 2 }}
                       >
                         <DeleteIcon />
                       </IconButton>
                     }
                     disablePadding
+                    sx={{ mb: isMobile ? 1 : 0 }}
                   >
-                    <ListItemButton onClick={() => toggleTodo(todo.id)} dense>
+                    <ListItemButton 
+                      onClick={() => toggleTodo(todo.id)} 
+                      dense
+                      sx={{ 
+                        pr: isMobile ? 6 : 8,
+                        py: isMobile ? 1 : 'auto'
+                      }}
+                    >
                       <ListItemIcon>
                         <Checkbox
                           edge="start"
@@ -116,9 +144,17 @@ const Todo: React.FC = () => {
                       <ListItemText 
                         primary={todo.text}
                         secondary={formatDate(todo.createdAt)}
-                        sx={{
-                          textDecoration: todo.completed ? 'line-through' : 'none',
-                          color: todo.completed ? 'text.secondary' : 'text.primary'
+                        primaryTypographyProps={{
+                          style: {
+                            textDecoration: todo.completed ? 'line-through' : 'none',
+                            color: todo.completed ? '#888' : 'inherit',
+                            fontSize: isMobile ? '0.9rem' : '1rem'
+                          }
+                        }}
+                        secondaryTypographyProps={{
+                          style: {
+                            fontSize: isMobile ? '0.7rem' : '0.8rem'
+                          }
                         }}
                       />
                     </ListItemButton>
