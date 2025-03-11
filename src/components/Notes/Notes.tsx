@@ -1,48 +1,74 @@
 import React, { useState, useEffect } from 'react';
-import { useNotes } from '../../contexts/NotesContext';
+import { useNotes, Note } from '../../contexts/NotesContext';
 import './Notes.css';
 
 const Notes: React.FC = () => {
   const { 
     notes, 
-    activeNote, 
-    setActiveNote, 
+    loading,
     createNote, 
     updateNoteTitle, 
     updateNoteContent, 
     deleteNote 
   } = useNotes();
   
+  const [activeNote, setActiveNote] = useState<Note | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
 
   // Update local state when active note changes
   useEffect(() => {
     if (activeNote) {
-      setTitle(activeNote.title);
-      setContent(activeNote.content);
-    } else {
-      setTitle('');
-      setContent('');
+      // Find the updated note from the notes array
+      const updatedNote = notes.find(note => note.id === activeNote.id);
+      if (updatedNote) {
+        setActiveNote(updatedNote);
+        setTitle(updatedNote.title);
+        setContent(updatedNote.content);
+      } else {
+        // If the active note was deleted
+        setActiveNote(null);
+        setTitle('');
+        setContent('');
+      }
     }
-  }, [activeNote]);
+  }, [notes]);
 
-  const handleNoteSelect = (note: any) => {
+  const handleNoteSelect = (note: Note) => {
     setActiveNote(note);
+    setTitle(note.title);
+    setContent(note.content);
   };
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setTitle(e.target.value);
+    const newTitle = e.target.value;
+    setTitle(newTitle);
     if (activeNote) {
-      updateNoteTitle(activeNote.id, e.target.value);
+      updateNoteTitle(activeNote.id, newTitle);
     }
   };
 
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setContent(e.target.value);
+    const newContent = e.target.value;
+    setContent(newContent);
     if (activeNote) {
-      updateNoteContent(activeNote.id, e.target.value);
+      updateNoteContent(activeNote.id, newContent);
     }
+  };
+
+  const handleCreateNote = () => {
+    createNote();
+    // The new note will be added to the notes array via the Firestore listener
+    // We'll select it in the next render cycle
+  };
+
+  const handleDeleteNote = (id: string) => {
+    if (activeNote && activeNote.id === id) {
+      setActiveNote(null);
+      setTitle('');
+      setContent('');
+    }
+    deleteNote(id);
   };
 
   const formatDate = (date: Date) => {
@@ -58,36 +84,44 @@ const Notes: React.FC = () => {
       <div className="notes-sidebar">
         <div className="notes-header">
           <h2>Notes</h2>
-          <button onClick={createNote}>New Note</button>
+          <button onClick={handleCreateNote}>New Note</button>
         </div>
         <div className="notes-list">
-          {notes.map((note) => (
-            <div
-              key={note.id}
-              className={`note-item ${
-                activeNote && activeNote.id === note.id ? 'active' : ''
-              }`}
-              onClick={() => handleNoteSelect(note)}
-            >
-              <div className="note-title">{note.title}</div>
-              <div className="note-meta">
-                <span className="note-date">{formatDate(note.createdAt)}</span>
-                <button
-                  className="note-delete"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteNote(note.id);
-                  }}
-                >
-                  Delete
-                </button>
+          {loading ? (
+            <div className="loading">Loading notes...</div>
+          ) : notes.length === 0 ? (
+            <div className="no-notes">No notes yet</div>
+          ) : (
+            notes.map((note) => (
+              <div
+                key={note.id}
+                className={`note-item ${
+                  activeNote && activeNote.id === note.id ? 'active' : ''
+                }`}
+                onClick={() => handleNoteSelect(note)}
+              >
+                <div className="note-title">{note.title}</div>
+                <div className="note-meta">
+                  <span className="note-date">{formatDate(note.updatedAt || note.createdAt)}</span>
+                  <button
+                    className="note-delete"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteNote(note.id);
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
       <div className="notes-editor">
-        {activeNote ? (
+        {loading ? (
+          <div className="loading">Loading...</div>
+        ) : activeNote ? (
           <>
             <input
               type="text"

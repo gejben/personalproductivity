@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useTodo } from '../../contexts/TodoContext';
+import { useTodo, TodoItem } from '../../contexts/TodoContext';
 import {
   Paper,
   Typography,
@@ -16,12 +16,12 @@ import {
   Divider,
   Card,
   CardContent,
-  Grid
+  CircularProgress
 } from '@mui/material';
 import { Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
 
 const Todo: React.FC = () => {
-  const { todos, addTodo, toggleTodo, deleteTodo } = useTodo();
+  const { todos, loading, addTodo, toggleTodo, deleteTodo } = useTodo();
   const [inputValue, setInputValue] = useState('');
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -33,6 +33,13 @@ const Todo: React.FC = () => {
       addTodo(inputValue);
       setInputValue('');
     }
+  };
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric'
+    });
   };
 
   return (
@@ -51,12 +58,14 @@ const Todo: React.FC = () => {
             onChange={handleInputChange}
             placeholder="Add a new task..."
             onKeyPress={(e) => e.key === 'Enter' && handleAddTodo()}
+            disabled={loading}
           />
           <Button 
             variant="contained" 
             color="primary" 
             onClick={handleAddTodo}
             startIcon={<AddIcon />}
+            disabled={loading}
           >
             Add
           </Button>
@@ -65,52 +74,59 @@ const Todo: React.FC = () => {
         <Divider sx={{ mb: 2 }} />
         
         <Paper elevation={0} sx={{ maxHeight: 400, overflow: 'auto' }}>
-          <List>
-            {todos.length === 0 ? (
-              <ListItem>
-                <ListItemText 
-                  primary="No tasks yet" 
-                  secondary="Add a task to get started" 
-                  sx={{ textAlign: 'center', color: 'text.secondary' }}
-                />
-              </ListItem>
-            ) : (
-              todos.map((todo) => (
-                <ListItem
-                  key={todo.id}
-                  secondaryAction={
-                    <IconButton 
-                      edge="end" 
-                      aria-label="delete" 
-                      onClick={() => deleteTodo(todo.id)}
-                      color="error"
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  }
-                  disablePadding
-                >
-                  <ListItemButton onClick={() => toggleTodo(todo.id)} dense>
-                    <ListItemIcon>
-                      <Checkbox
-                        edge="start"
-                        checked={todo.completed}
-                        tabIndex={-1}
-                        disableRipple
-                      />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary={todo.text}
-                      sx={{
-                        textDecoration: todo.completed ? 'line-through' : 'none',
-                        color: todo.completed ? 'text.secondary' : 'text.primary'
-                      }}
-                    />
-                  </ListItemButton>
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress size={24} />
+            </Box>
+          ) : (
+            <List>
+              {todos.length === 0 ? (
+                <ListItem>
+                  <ListItemText 
+                    primary="No tasks yet" 
+                    secondary="Add a task to get started" 
+                    sx={{ textAlign: 'center', color: 'text.secondary' }}
+                  />
                 </ListItem>
-              ))
-            )}
-          </List>
+              ) : (
+                todos.map((todo) => (
+                  <ListItem
+                    key={todo.id}
+                    secondaryAction={
+                      <IconButton 
+                        edge="end" 
+                        aria-label="delete" 
+                        onClick={() => deleteTodo(todo.id)}
+                        color="error"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    }
+                    disablePadding
+                  >
+                    <ListItemButton onClick={() => toggleTodo(todo.id)} dense>
+                      <ListItemIcon>
+                        <Checkbox
+                          edge="start"
+                          checked={todo.completed}
+                          tabIndex={-1}
+                          disableRipple
+                        />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary={todo.text}
+                        secondary={formatDate(todo.createdAt)}
+                        sx={{
+                          textDecoration: todo.completed ? 'line-through' : 'none',
+                          color: todo.completed ? 'text.secondary' : 'text.primary'
+                        }}
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                ))
+              )}
+            </List>
+          )}
         </Paper>
       </CardContent>
     </Card>
