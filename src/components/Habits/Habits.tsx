@@ -1,6 +1,46 @@
 import React, { useState } from 'react';
 import { useHabits, Habit, FrequencyType, HabitStats } from '../../contexts/HabitsContext';
-import './Habits.css';
+import {
+  Box,
+  Typography,
+  Button,
+  Card,
+  CardContent,
+  CardActions,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Checkbox,
+  FormGroup,
+  FormControlLabel,
+  Grid,
+  Divider,
+  IconButton,
+  Chip,
+  Paper,
+  Tab,
+  Tabs,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  LinearProgress,
+  ToggleButtonGroup,
+  ToggleButton,
+  Tooltip,
+  Stack,
+  SelectChangeEvent
+} from '@mui/material';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Check as CheckIcon,
+  Close as CloseIcon,
+  Refresh as RefreshIcon
+} from '@mui/icons-material';
 
 const Habits: React.FC = () => {
   const {
@@ -19,6 +59,7 @@ const Habits: React.FC = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showAllHabits, setShowAllHabits] = useState(false);
   const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
+  const [tabValue, setTabValue] = useState(0);
 
   // Form state for adding/editing habits
   const [formData, setFormData] = useState<{
@@ -51,8 +92,17 @@ const Habits: React.FC = () => {
 
   // Handle form input changes
   const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: value,
+    });
+  };
+
+  // Handle select changes
+  const handleSelectChange = (e: SelectChangeEvent) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
@@ -187,216 +237,335 @@ const Habits: React.FC = () => {
     const isEditing = !!editingHabitId;
     
     return (
-      <div className="habit-form-container">
-        <h3>{isEditing ? 'Edit Habit' : 'Add New Habit'}</h3>
-        <form onSubmit={isEditing ? handleUpdateHabit : handleAddHabit}>
-          <div className="form-group">
-            <label htmlFor="name">Habit Name</label>
-            <input
-              type="text"
+      <Dialog 
+        open={showAddForm || !!editingHabitId} 
+        onClose={handleCancelEdit}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          {isEditing ? 'Edit Habit' : 'Add New Habit'}
+        </DialogTitle>
+        <DialogContent>
+          <Box component="form" onSubmit={isEditing ? handleUpdateHabit : handleAddHabit} sx={{ mt: 1 }}>
+            <TextField
+              margin="normal"
+              required
+              fullWidth
               id="name"
+              label="Habit Name"
               name="name"
               value={formData.name}
               onChange={handleInputChange}
               placeholder="e.g., Morning Exercise"
-              required
+              autoFocus
             />
-          </div>
 
-          <div className="form-group">
-            <label htmlFor="description">Description (Optional)</label>
-            <textarea
+            <TextField
+              margin="normal"
+              fullWidth
               id="description"
+              label="Description (Optional)"
               name="description"
               value={formData.description}
               onChange={handleInputChange}
               placeholder="Describe your habit..."
+              multiline
               rows={3}
             />
-          </div>
 
-          <div className="form-group">
-            <label htmlFor="frequencyType">Frequency</label>
-            <select
-              id="frequencyType"
-              name="frequencyType"
-              value={formData.frequencyType}
-              onChange={handleInputChange}
-            >
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-              <option value="custom">Custom</option>
-            </select>
-          </div>
+            <FormControl fullWidth margin="normal">
+              <InputLabel id="frequency-type-label">Frequency</InputLabel>
+              <Select
+                labelId="frequency-type-label"
+                id="frequencyType"
+                name="frequencyType"
+                value={formData.frequencyType}
+                onChange={handleSelectChange}
+                label="Frequency"
+              >
+                <MenuItem value="daily">Daily</MenuItem>
+                <MenuItem value="weekly">Weekly</MenuItem>
+                <MenuItem value="monthly">Monthly</MenuItem>
+                <MenuItem value="custom">Custom</MenuItem>
+              </Select>
+            </FormControl>
 
-          <div className="form-group">
-            <label htmlFor="frequencyCount">Times per {formData.frequencyType.slice(0, -2)}</label>
-            <input
-              type="number"
+            <TextField
+              margin="normal"
+              fullWidth
               id="frequencyCount"
+              label={`Times per ${formData.frequencyType.slice(0, -2)}`}
               name="frequencyCount"
+              type="number"
               value={formData.frequencyCount}
               onChange={handleInputChange}
-              min="1"
-              max="30"
+              inputProps={{ min: 1, max: 30 }}
             />
-          </div>
 
-          {(formData.frequencyType === 'weekly' || formData.frequencyType === 'custom') && (
-            <div className="form-group">
-              <label>Days of the Week</label>
-              <div className="day-selector">
-                {getDayNames().map((day, index) => (
-                  <div
-                    key={day}
-                    className={`day-item ${
-                      formData.frequencyDays.includes(index) ? 'selected' : ''
-                    }`}
-                    onClick={() => handleDayToggle(index)}
-                  >
-                    {day}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+            {(formData.frequencyType === 'weekly' || formData.frequencyType === 'custom') && (
+              <FormControl fullWidth margin="normal">
+                <Typography variant="subtitle2" gutterBottom>
+                  Days of the Week
+                </Typography>
+                <ToggleButtonGroup
+                  value={formData.frequencyDays}
+                  onChange={(e, newDays) => {
+                    setFormData({
+                      ...formData,
+                      frequencyDays: newDays as number[]
+                    });
+                  }}
+                  aria-label="days of week"
+                >
+                  {getDayNames().map((day, index) => (
+                    <ToggleButton 
+                      key={day} 
+                      value={index}
+                      aria-label={day}
+                      sx={{ minWidth: 40 }}
+                    >
+                      {day}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
+              </FormControl>
+            )}
 
-          <div className="form-group">
-            <label htmlFor="color">Color</label>
-            <input
-              type="color"
+            <TextField
+              margin="normal"
+              fullWidth
               id="color"
+              label="Color"
               name="color"
+              type="color"
               value={formData.color}
               onChange={handleInputChange}
+              sx={{ mt: 2 }}
             />
-          </div>
-
-          <div className="form-actions">
-            <button type="submit" className="btn-primary">
-              {isEditing ? 'Update Habit' : 'Add Habit'}
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={handleCancelEdit}
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelEdit}>Cancel</Button>
+          <Button 
+            onClick={isEditing ? handleUpdateHabit : handleAddHabit}
+            variant="contained"
+          >
+            {isEditing ? 'Update' : 'Add'} Habit
+          </Button>
+        </DialogActions>
+      </Dialog>
     );
   };
 
-  // Render a single habit item
+  // Render habit item
   const renderHabitItem = (habit: Habit) => {
     const stats = getHabitStats(habit.id);
-    const isCompleted = getCompletionStatus(habit.id, new Date());
+    const isCompletedToday = getCompletionStatus(habit.id, new Date());
     
     return (
-      <div
-        className={`habit-item ${isCompleted ? 'completed' : ''}`}
-        key={habit.id}
-        style={{ borderLeftColor: habit.color }}
+      <Card 
+        key={habit.id} 
+        sx={{ 
+          mb: 2, 
+          borderLeft: `4px solid ${habit.color}`,
+          opacity: habit.active ? 1 : 0.6
+        }}
       >
-        <div className="habit-header">
-          <h3>{habit.name}</h3>
-          <div className="habit-actions">
-            <button
-              className="btn-icon"
-              onClick={() => handleEditHabit(habit)}
-              title="Edit"
-            >
-              ✏️
-            </button>
-            <button
-              className="btn-icon"
-              onClick={() => deleteHabit(habit.id)}
-              title="Delete"
-            >
-              🗑️
-            </button>
-          </div>
-        </div>
-        
-        {habit.description && <p className="habit-description">{habit.description}</p>}
-        
-        <div className="habit-details">
-          <span className="habit-frequency">{formatFrequency(habit)}</span>
-          <div className="habit-stats">
-            <span title="Current Streak">🔥 {stats.currentStreak}</span>
-            <span title="Completion Rate">📊 {stats.completionRate}%</span>
-          </div>
-        </div>
-        
-        <button
-          className={`habit-complete-btn ${isCompleted ? 'completed' : ''}`}
-          onClick={() => toggleHabitCompletion(habit.id, new Date())}
-        >
-          {isCompleted ? 'Completed' : 'Mark Complete'}
-        </button>
-      </div>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <Box>
+              <Typography variant="h6" component="h3">
+                {habit.name}
+              </Typography>
+              {habit.description && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  {habit.description}
+                </Typography>
+              )}
+              <Chip 
+                label={formatFrequency(habit)} 
+                size="small" 
+                sx={{ mt: 1, mr: 1 }}
+              />
+            </Box>
+            <Box>
+              <IconButton 
+                size="small" 
+                onClick={() => handleEditHabit(habit)}
+                color="primary"
+              >
+                <EditIcon fontSize="small" />
+              </IconButton>
+              <IconButton 
+                size="small" 
+                onClick={() => deleteHabit(habit.id)}
+                color="error"
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          </Box>
+          
+          <Box sx={{ mt: 2 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={6} sm={3}>
+                <Typography variant="caption" color="text.secondary">
+                  Current Streak
+                </Typography>
+                <Typography variant="h6">
+                  {stats.currentStreak} days
+                </Typography>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Typography variant="caption" color="text.secondary">
+                  Longest Streak
+                </Typography>
+                <Typography variant="h6">
+                  {stats.longestStreak} days
+                </Typography>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Typography variant="caption" color="text.secondary">
+                  Completion Rate
+                </Typography>
+                <Typography variant="h6">
+                  {stats.completionRate}%
+                </Typography>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Typography variant="caption" color="text.secondary">
+                  Total Completions
+                </Typography>
+                <Typography variant="h6">
+                  {stats.totalCompletions}
+                </Typography>
+              </Grid>
+            </Grid>
+            
+            <LinearProgress 
+              variant="determinate" 
+              value={stats.completionRate} 
+              sx={{ mt: 1, height: 8, borderRadius: 4 }}
+            />
+          </Box>
+        </CardContent>
+        <CardActions>
+          <Button
+            startIcon={isCompletedToday ? <RefreshIcon /> : <CheckIcon />}
+            onClick={() => toggleHabitCompletion(habit.id, new Date())}
+            color={isCompletedToday ? "secondary" : "primary"}
+            variant={isCompletedToday ? "outlined" : "contained"}
+            fullWidth
+          >
+            {isCompletedToday ? 'Completed Today' : 'Mark Complete'}
+          </Button>
+        </CardActions>
+      </Card>
     );
   };
 
-  // Get habits to display based on filter
-  const habitsToDisplay = showAllHabits ? habits : getHabitsForToday();
-  const completedToday = getCompletedHabitsForToday().length;
-  const remainingToday = getRemainingHabitsForToday().length;
+  // Get habits to display based on selected tab
+  const getDisplayedHabits = () => {
+    switch (tabValue) {
+      case 0: // Today's habits
+        return getHabitsForToday();
+      case 1: // All habits
+        return habits;
+      default:
+        return getHabitsForToday();
+    }
+  };
 
   return (
-    <div className="habits-container">
-      <div className="habits-header">
-        <h2>Habits</h2>
-        <div className="habits-summary">
-          <div className="habit-stat-item">
-            <span className="stat-value">{completedToday}</span>
-            <span className="stat-label">Completed Today</span>
-          </div>
-          <div className="habit-stat-item">
-            <span className="stat-value">{remainingToday}</span>
-            <span className="stat-label">Remaining Today</span>
-          </div>
-          <div className="habit-stat-item">
-            <span className="stat-value">{habits.length}</span>
-            <span className="stat-label">Total Habits</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="habits-actions">
-        <button
-          className="btn-primary"
-          onClick={() => {
-            resetFormData();
-            setShowAddForm(!showAddForm);
-            setEditingHabitId(null);
-          }}
+    <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h5" component="h2">
+          Habit Tracker
+        </Typography>
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<AddIcon />}
+          onClick={() => setShowAddForm(true)}
         >
-          {showAddForm ? 'Cancel' : 'Add New Habit'}
-        </button>
-        <button
-          className="btn-secondary"
-          onClick={() => setShowAllHabits(!showAllHabits)}
+          Add Habit
+        </Button>
+      </Box>
+
+      <Paper sx={{ mb: 3 }}>
+        <Tabs
+          value={tabValue}
+          onChange={(e, newValue) => setTabValue(newValue)}
+          indicatorColor="primary"
+          textColor="primary"
+          variant="fullWidth"
         >
-          {showAllHabits ? 'Show Today\'s Habits' : 'Show All Habits'}
-        </button>
-      </div>
+          <Tab label="Today's Habits" />
+          <Tab label="All Habits" />
+        </Tabs>
+      </Paper>
 
-      {(showAddForm || editingHabitId) && renderHabitForm()}
+      <Box sx={{ mb: 2 }}>
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={4}>
+            <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'primary.light', color: 'white' }}>
+              <Typography variant="h6">
+                {getHabitsForToday().length}
+              </Typography>
+              <Typography variant="body2">
+                Habits Today
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'success.light', color: 'white' }}>
+              <Typography variant="h6">
+                {getCompletedHabitsForToday().length}
+              </Typography>
+              <Typography variant="body2">
+                Completed
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'warning.light', color: 'white' }}>
+              <Typography variant="h6">
+                {getRemainingHabitsForToday().length}
+              </Typography>
+              <Typography variant="body2">
+                Remaining
+              </Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+      </Box>
 
-      <div className="habits-list">
-        {habitsToDisplay.length === 0 ? (
-          <div className="no-habits">
-            <p>No habits to display. Start by adding a new habit!</p>
-          </div>
-        ) : (
-          habitsToDisplay.map(renderHabitItem)
-        )}
-      </div>
-    </div>
+      {getDisplayedHabits().length === 0 ? (
+        <Paper sx={{ p: 3, textAlign: 'center' }}>
+          <Typography variant="body1" color="text.secondary">
+            {tabValue === 0 
+              ? "You don't have any habits scheduled for today." 
+              : "You haven't created any habits yet."}
+          </Typography>
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={() => setShowAddForm(true)}
+            sx={{ mt: 2 }}
+          >
+            Add Your First Habit
+          </Button>
+        </Paper>
+      ) : (
+        <Box>
+          {getDisplayedHabits().map(renderHabitItem)}
+        </Box>
+      )}
+
+      {renderHabitForm()}
+    </Box>
   );
 };
 
