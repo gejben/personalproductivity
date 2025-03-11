@@ -1,19 +1,17 @@
-import React, { createContext, useContext, ReactNode } from 'react';
-
-interface User {
-  id: string;
-  name: string;
-}
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useAuth } from './AuthContext';
+import { 
+  getUserFromFirestore, 
+  updateUserInFirestore, 
+  FirestoreUser 
+} from '../firebase/firebase';
 
 interface UserContextType {
+  userData: FirestoreUser | null;
+  loading: boolean;
+  updateUserData: (data: Partial<FirestoreUser>) => Promise<void>;
   getUserStorageKey: (key: string) => string;
 }
-
-// Create a fixed user
-const FIXED_USER: User = {
-  id: 'gejben-user-id',
-  name: 'gejben'
-};
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
@@ -22,14 +20,63 @@ interface UserProviderProps {
 }
 
 export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
-  // Helper function to get user-specific storage keys
+  const { currentUser, isAuthenticated } = useAuth();
+  const [userData, setUserData] = useState<FirestoreUser | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch user data from Firestore when auth state changes
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (isAuthenticated && currentUser) {
+        try {
+          setLoading(true);
+          const firestoreUser = await getUserFromFirestore(currentUser.uid);
+          setUserData(firestoreUser);
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        setUserData(null);
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, [currentUser, isAuthenticated]);
+
+  // Update user data in Firestore
+  const updateUserData = async (data: Partial<FirestoreUser>) => {
+    if (!currentUser) {
+      throw new Error('No authenticated user');
+    }
+
+    try {
+      await updateUserInFirestore(currentUser.uid, data);
+      
+      // Update local state
+      setUserData(prev => prev ? { ...prev, ...data } : null);
+    } catch (error) {
+      console.error('Error updating user data:', error);
+      throw error;
+    }
+  };
+
+  // Helper function to get user-specific storage keys (for backward compatibility)
   const getUserStorageKey = (key: string): string => {
-    return `${key}_${FIXED_USER.id}`;
+    if (!currentUser) {
+      return key;
+    }
+    return `${key}_${currentUser.uid}`;
   };
 
   return (
     <UserContext.Provider
       value={{
+        userData,
+        loading,
+        updateUserData,
         getUserStorageKey,
       }}
     >

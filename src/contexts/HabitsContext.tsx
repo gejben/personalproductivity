@@ -1,5 +1,20 @@
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import { useUser } from './UserContext';
+import { useAuth } from './AuthContext';
+import { 
+  collection, 
+  doc, 
+  setDoc, 
+  getDocs, 
+  updateDoc, 
+  deleteDoc, 
+  query, 
+  where, 
+  serverTimestamp,
+  Timestamp,
+  onSnapshot
+} from 'firebase/firestore';
+import { db } from '../firebase/firebase';
 
 // Frequency types for habits
 export type FrequencyType = 'daily' | 'weekly' | 'monthly' | 'custom';
@@ -54,25 +69,74 @@ interface HabitsProviderProps {
 
 export const HabitsProvider: React.FC<HabitsProviderProps> = ({ children }) => {
   const [habits, setHabits] = useState<Habit[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { currentUser } = useAuth();
   const { getUserStorageKey } = useUser();
 
-  // Load habits from localStorage on component mount
-  useEffect(() => {
-    const savedHabits = localStorage.getItem(getUserStorageKey('habits'));
-    if (savedHabits) {
-      const parsedHabits = JSON.parse(savedHabits);
-      // Convert string dates back to Date objects
-      const habitsWithDates = parsedHabits.map((habit: any) => ({
-        ...habit,
-        createdAt: new Date(habit.createdAt),
-      }));
-      setHabits(habitsWithDates);
-    }
-  }, [getUserStorageKey]);
+  // Convert Firestore data to Habit object
+  const convertFirestoreHabitToHabit = (data: any): Habit => {
+    return {
+      ...data,
+      createdAt: data.createdAt instanceof Timestamp 
+        ? data.createdAt.toDate() 
+        : new Date(data.createdAt),
+      completions: data.completions || []
+    };
+  };
 
-  // Save habits to localStorage whenever they change
+  // Load habits from Firestore when user changes
   useEffect(() => {
-    localStorage.setItem(getUserStorageKey('habits'), JSON.stringify(habits));
+    if (!currentUser) {
+      setHabits([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
+    // Create a reference to the user's habits collection
+    const habitsRef = collection(db, 'users', currentUser.uid, 'habits');
+    
+    // Set up real-time listener
+    const unsubscribe = onSnapshot(habitsRef, (snapshot) => {
+      const habitsData: Habit[] = [];
+      snapshot.forEach((doc) => {
+        const habitData = doc.data();
+        habitsData.push(convertFirestoreHabitToHabit({
+          id: doc.id,
+          ...habitData
+        }));
+      });
+      setHabits(habitsData);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error loading habits from Firestore:", error);
+      
+      // Fallback to localStorage if Firestore fails
+      const savedHabits = localStorage.getItem(getUserStorageKey('habits'));
+      if (savedHabits) {
+        try {
+          const parsedHabits = JSON.parse(savedHabits);
+          const habitsWithDates = parsedHabits.map((habit: any) => ({
+            ...habit,
+            createdAt: new Date(habit.createdAt),
+          }));
+          setHabits(habitsWithDates);
+        } catch (e) {
+          console.error("Error parsing habits from localStorage:", e);
+        }
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser, getUserStorageKey]);
+
+  // Save habits to localStorage as backup
+  useEffect(() => {
+    if (habits.length > 0) {
+      localStorage.setItem(getUserStorageKey('habits'), JSON.stringify(habits));
+    }
   }, [habits, getUserStorageKey]);
 
   // Helper function to format date as YYYY-MM-DD
@@ -81,64 +145,135 @@ export const HabitsProvider: React.FC<HabitsProviderProps> = ({ children }) => {
   };
 
   // Add a new habit
-  const addHabit = (habitData: Omit<Habit, 'id' | 'createdAt' | 'completions'>) => {
-    const newHabit: Habit = {
-      ...habitData,
-      id: Date.now().toString(),
-      createdAt: new Date(),
-      completions: [],
-      active: true,
-    };
-    setHabits([...habits, newHabit]);
+  const addHabit = async (habitData: Omit<Habit, 'id' | 'createdAt' | 'completions'>) => {
+    if (!currentUser) return;
+
+    try {
+      // Create a new document reference with auto-generated ID
+      const habitsRef = collection(db, 'users', currentUser.uid, 'habits');
+      const newHabitRef = doc(habitsRef);
+      
+      const newHabit: Habit = {
+        ...habitData,
+        id: newHabitRef.id,
+        createdAt: new Date(),
+        completions: [],
+        active: true,
+      };
+
+      // Save to Firestore
+      await setDoc(newHabitRef, {
+        ...newHabit,
+        createdAt: serverTimestamp()
+      });
+
+      // Update local state (will be updated by onSnapshot listener)
+      // setHabits([...habits, newHabit]);
+    } catch (error) {
+      console.error("Error adding habit to Firestore:", error);
+      
+      // Fallback to local state only if Firestore fails
+      const newHabit: Habit = {
+        ...habitData,
+        id: Date.now().toString(),
+        createdAt: new Date(),
+        completions: [],
+        active: true,
+      };
+      setHabits([...habits, newHabit]);
+    }
   };
 
   // Update an existing habit
-  const updateHabit = (id: string, updates: Partial<Habit>) => {
-    setHabits(
-      habits.map((habit) =>
-        habit.id === id ? { ...habit, ...updates } : habit
-      )
-    );
+  const updateHabit = async (id: string, updates: Partial<Habit>) => {
+    if (!currentUser) return;
+
+    try {
+      // Update in Firestore
+      const habitRef = doc(db, 'users', currentUser.uid, 'habits', id);
+      await updateDoc(habitRef, updates);
+
+      // Update will be handled by onSnapshot listener
+    } catch (error) {
+      console.error("Error updating habit in Firestore:", error);
+      
+      // Fallback to local state only if Firestore fails
+      setHabits(
+        habits.map((habit) =>
+          habit.id === id ? { ...habit, ...updates } : habit
+        )
+      );
+    }
   };
 
   // Delete a habit
-  const deleteHabit = (id: string) => {
-    setHabits(habits.filter((habit) => habit.id !== id));
+  const deleteHabit = async (id: string) => {
+    if (!currentUser) return;
+
+    try {
+      // Delete from Firestore
+      const habitRef = doc(db, 'users', currentUser.uid, 'habits', id);
+      await deleteDoc(habitRef);
+
+      // Delete will be handled by onSnapshot listener
+    } catch (error) {
+      console.error("Error deleting habit from Firestore:", error);
+      
+      // Fallback to local state only if Firestore fails
+      setHabits(habits.filter((habit) => habit.id !== id));
+    }
   };
 
   // Toggle completion status for a habit on a specific date
-  const toggleHabitCompletion = (habitId: string, date: Date) => {
-    const dateStr = formatDate(date);
+  const toggleHabitCompletion = async (habitId: string, date: Date) => {
+    if (!currentUser) return;
     
-    setHabits(
-      habits.map((habit) => {
-        if (habit.id !== habitId) return habit;
-        
-        const existingCompletion = habit.completions.find(
-          (c) => c.date === dateStr
-        );
-        
-        let newCompletions;
-        
-        if (existingCompletion) {
-          // Toggle existing completion
-          newCompletions = habit.completions.map((c) =>
-            c.date === dateStr ? { ...c, completed: !c.completed } : c
-          );
-        } else {
-          // Add new completion
-          newCompletions = [
-            ...habit.completions,
-            { date: dateStr, completed: true },
-          ];
-        }
-        
-        return {
-          ...habit,
-          completions: newCompletions,
-        };
-      })
+    const dateStr = formatDate(date);
+    const habitToUpdate = habits.find(h => h.id === habitId);
+    
+    if (!habitToUpdate) return;
+    
+    const existingCompletion = habitToUpdate.completions.find(
+      (c) => c.date === dateStr
     );
+    
+    let newCompletions: HabitCompletion[];
+    
+    if (existingCompletion) {
+      // Toggle existing completion
+      newCompletions = habitToUpdate.completions.map((c) =>
+        c.date === dateStr ? { ...c, completed: !c.completed } : c
+      );
+    } else {
+      // Add new completion
+      newCompletions = [
+        ...habitToUpdate.completions,
+        { date: dateStr, completed: true },
+      ];
+    }
+    
+    try {
+      // Update in Firestore
+      const habitRef = doc(db, 'users', currentUser.uid, 'habits', habitId);
+      await updateDoc(habitRef, {
+        completions: newCompletions
+      });
+
+      // Update will be handled by onSnapshot listener
+    } catch (error) {
+      console.error("Error updating habit completion in Firestore:", error);
+      
+      // Fallback to local state only if Firestore fails
+      setHabits(
+        habits.map((habit) => {
+          if (habit.id !== habitId) return habit;
+          return {
+            ...habit,
+            completions: newCompletions,
+          };
+        })
+      );
+    }
   };
 
   // Check if a habit should be done on a specific day
