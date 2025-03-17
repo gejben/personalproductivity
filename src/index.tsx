@@ -10,7 +10,10 @@ import { TodoProvider } from './contexts/TodoContext';
 import { NotesProvider } from './contexts/NotesContext';
 import { HabitsProvider } from './contexts/HabitsContext';
 import { PomodoroProvider } from './contexts/PomodoroContext';
+import { SettingsProvider } from './contexts/SettingsContext';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
+// Initialize Firebase before rendering the app
+import './firebase/initialize';
 
 // Create a custom Material UI theme
 const theme = createTheme({
@@ -64,15 +67,17 @@ root.render(
       <BrowserRouter>
         <AuthProvider>
           <UserProvider>
-            <TodoProvider>
-              <NotesProvider>
-                <HabitsProvider>
-                  <PomodoroProvider>
-                    <App />
-                  </PomodoroProvider>
-                </HabitsProvider>
-              </NotesProvider>
-            </TodoProvider>
+            <SettingsProvider>
+              <TodoProvider>
+                <NotesProvider>
+                  <HabitsProvider>
+                    <PomodoroProvider>
+                      <App />
+                    </PomodoroProvider>
+                  </HabitsProvider>
+                </NotesProvider>
+              </TodoProvider>
+            </SettingsProvider>
           </UserProvider>
         </AuthProvider>
       </BrowserRouter>

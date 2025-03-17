@@ -1,14 +1,12 @@
-import { initializeApp } from 'firebase/app';
 import { 
-  getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
   signOut as firebaseSignOut,
   onAuthStateChanged,
-  User
+  User,
+  Auth
 } from 'firebase/auth';
 import {
-  getFirestore,
   doc,
   setDoc,
   getDoc,
@@ -19,14 +17,12 @@ import {
   getDocs,
   serverTimestamp,
   DocumentReference,
-  DocumentData
+  DocumentData,
+  Firestore
 } from 'firebase/firestore';
-import { firebaseConfig } from './config';
+import { auth, db } from './initialize';
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+// Create a Google provider
 const googleProvider = new GoogleAuthProvider();
 
 // User interface for Firestore
@@ -114,7 +110,10 @@ export const getUserFromFirestore = async (uid: string): Promise<FirestoreUser |
 export const updateUserInFirestore = async (uid: string, data: Partial<FirestoreUser>) => {
   try {
     const userRef = doc(db, 'users', uid);
-    await updateDoc(userRef, data);
+    await updateDoc(userRef, {
+      ...data,
+      updatedAt: serverTimestamp()
+    });
   } catch (error) {
     console.error('Error updating user in Firestore:', error);
     throw error;
@@ -141,4 +140,5 @@ export const onAuthStateChange = (callback: (user: User | null) => void) => {
   return onAuthStateChanged(auth, callback);
 };
 
+// Export for use in other files
 export { auth, db }; 

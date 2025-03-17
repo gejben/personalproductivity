@@ -13,7 +13,7 @@ import {
   query,
   orderBy
 } from 'firebase/firestore';
-import { db } from '../firebase/firebase';
+import { db } from '../firebase/initialize';
 
 export interface Note {
   id: string;
@@ -59,55 +59,65 @@ export const NotesProvider: React.FC<NotesProviderProps> = ({ children }) => {
 
   // Load notes from Firestore when user changes
   useEffect(() => {
-    if (!currentUser) {
-      setNotes([]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-
-    // Create a reference to the user's notes collection
-    const notesRef = collection(db, 'users', currentUser.uid, 'notes');
-    
-    // Create a query to order notes by update date
-    const notesQuery = query(notesRef, orderBy('updatedAt', 'desc'));
-    
-    // Set up real-time listener
-    const unsubscribe = onSnapshot(notesQuery, (snapshot) => {
-      const notesData: Note[] = [];
-      snapshot.forEach((doc) => {
-        const noteData = doc.data();
-        notesData.push(convertFirestoreNoteToNote({
-          id: doc.id,
-          ...noteData
-        }));
-      });
-      setNotes(notesData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error loading notes from Firestore:", error);
-      
-      // Fallback to localStorage if Firestore fails
-      const savedNotes = localStorage.getItem(getUserStorageKey('notes'));
-      if (savedNotes) {
-        try {
-          const parsedNotes = JSON.parse(savedNotes);
-          // Add createdAt and updatedAt if they don't exist
-          const notesWithDates = parsedNotes.map((note: any) => ({
-            ...note,
-            createdAt: note.createdAt ? new Date(note.createdAt) : new Date(),
-            updatedAt: note.updatedAt ? new Date(note.updatedAt) : new Date()
-          }));
-          setNotes(notesWithDates);
-        } catch (e) {
-          console.error("Error parsing notes from localStorage:", e);
-        }
+    const fetchNotes = async () => {
+      if (!currentUser) {
+        setNotes([]);
+        setLoading(false);
+        return;
       }
-      setLoading(false);
-    });
 
-    return () => unsubscribe();
+      setLoading(true);
+
+      try {
+        // Create a reference to the user's notes collection
+        const notesRef = collection(db, 'users', currentUser.uid, 'notes');
+        
+        // Create a query to order notes by update date
+        const notesQuery = query(notesRef, orderBy('updatedAt', 'desc'));
+        
+        // Set up real-time listener
+        const unsubscribe = onSnapshot(notesQuery, (snapshot) => {
+          const notesData: Note[] = [];
+          snapshot.forEach((doc) => {
+            const noteData = doc.data();
+            notesData.push(convertFirestoreNoteToNote({
+              id: doc.id,
+              ...noteData
+            }));
+          });
+          setNotes(notesData);
+          setLoading(false);
+        }, (error) => {
+          console.error("Error loading notes from Firestore:", error);
+          
+          // Fallback to localStorage if Firestore fails
+          const savedNotes = localStorage.getItem(getUserStorageKey('notes'));
+          if (savedNotes) {
+            try {
+              const parsedNotes = JSON.parse(savedNotes);
+              // Add createdAt and updatedAt if they don't exist
+              const notesWithDates = parsedNotes.map((note: any) => ({
+                ...note,
+                createdAt: note.createdAt ? new Date(note.createdAt) : new Date(),
+                updatedAt: note.updatedAt ? new Date(note.updatedAt) : new Date()
+              }));
+              setNotes(notesWithDates);
+            } catch (e) {
+              console.error("Error parsing notes from localStorage:", e);
+            }
+          }
+          setLoading(false);
+        });
+
+        return () => unsubscribe();
+      } catch (error) {
+        console.error("Error setting up notes listener:", error);
+        setLoading(false);
+        return () => {};
+      }
+    };
+    
+    fetchNotes();
   }, [currentUser, getUserStorageKey]);
 
   // Save notes to localStorage as backup

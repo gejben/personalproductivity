@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User } from 'firebase/auth';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { onAuthStateChange, signInWithGoogle, signOut, getCurrentUser } from '../firebase/firebase';
+import { User, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../firebase/initialize';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -21,8 +20,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Initialize auth listener
   useEffect(() => {
-    const unsubscribe = onAuthStateChange((user) => {
+    console.log('Setting up auth state listener');
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log('Auth state changed:', user ? 'User logged in' : 'No user');
       setCurrentUser(user);
       setLoading(false);
     });
@@ -32,8 +34,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signIn = async (): Promise<User | null> => {
     try {
-      const user = await signInWithGoogle();
-      return user;
+      const googleProvider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, googleProvider);
+      return result.user;
     } catch (error) {
       console.error('Error during sign in:', error);
       return null;
@@ -42,7 +45,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logOut = async (): Promise<void> => {
     try {
-      await signOut();
+      await firebaseSignOut(auth);
     } catch (error) {
       console.error('Error during sign out:', error);
     }
@@ -58,7 +61,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 };

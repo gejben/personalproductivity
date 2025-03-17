@@ -142,7 +142,7 @@ const Todo: React.FC = () => {
                         />
                       </ListItemIcon>
                       <ListItemText 
-                        primary={todo.text}
+                        primary={todo.title}
                         secondary={formatDate(todo.createdAt)}
                         primaryTypographyProps={{
                           style: {

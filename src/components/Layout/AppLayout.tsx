@@ -27,6 +27,8 @@ import {
   Note as NoteIcon,
   Timer as PomodoroIcon,
   Repeat as HabitsIcon,
+  CalendarMonth as CalendarIcon,
+  Settings as SettingsIcon,
   Logout as LogoutIcon
 } from '@mui/icons-material';
 
@@ -59,6 +61,8 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     { text: 'Notes', icon: <NoteIcon />, path: '/notes' },
     { text: 'Pomodoro', icon: <PomodoroIcon />, path: '/pomodoro' },
     { text: 'Habits', icon: <HabitsIcon />, path: '/habits' },
+    { text: 'Calendar', icon: <CalendarIcon />, path: '/calendar' },
+    { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
   ];
 
   const drawer = (

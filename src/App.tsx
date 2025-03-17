@@ -5,6 +5,8 @@ import Todo from './components/Todo/Todo';
 import Notes from './components/Notes/Notes';
 import Pomodoro from './components/Pomodoro/Pomodoro';
 import Habits from './components/Habits/Habits';
+import Calendar from './components/Calendar/Calendar';
+import SettingsPage from './components/Settings/SettingsPage';
 import Login from './components/Auth/Login';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import AppLayout from './components/Layout/AppLayout';
@@ -42,6 +44,16 @@ function App() {
           <Route path="/habits" element={
             <AppLayout>
               <Habits />
+            </AppLayout>
+          } />
+          <Route path="/calendar" element={
+            <AppLayout>
+              <Calendar />
+            </AppLayout>
+          } />
+          <Route path="/settings" element={
+            <AppLayout>
+              <SettingsPage />
             </AppLayout>
           } />
         </Route>

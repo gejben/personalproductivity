@@ -1,10 +1,23 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
-import { 
-  getUserFromFirestore, 
-  updateUserInFirestore, 
-  FirestoreUser 
-} from '../firebase/firebase';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebase/initialize';
+
+// Copy the FirestoreUser interface from firebase.ts to avoid circular imports
+export interface FirestoreUser {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+  lastLogin: any; // Firestore timestamp
+  createdAt: any; // Firestore timestamp
+  settings?: {
+    theme?: string;
+    notifications?: boolean;
+    [key: string]: any;
+  };
+  [key: string]: any; // Allow for additional fields
+}
 
 interface UserContextType {
   userData: FirestoreUser | null;
@@ -30,8 +43,14 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
       if (isAuthenticated && currentUser) {
         try {
           setLoading(true);
-          const firestoreUser = await getUserFromFirestore(currentUser.uid);
-          setUserData(firestoreUser);
+          const userRef = doc(db, 'users', currentUser.uid);
+          const userSnap = await getDoc(userRef);
+          
+          if (userSnap.exists()) {
+            setUserData(userSnap.data() as FirestoreUser);
+          } else {
+            setUserData(null);
+          }
         } catch (error) {
           console.error('Error fetching user data:', error);
         } finally {
@@ -53,7 +72,11 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
     }
 
     try {
-      await updateUserInFirestore(currentUser.uid, data);
+      const userRef = doc(db, 'users', currentUser.uid);
+      await updateDoc(userRef, {
+        ...data,
+        updatedAt: serverTimestamp()
+      });
       
       // Update local state
       setUserData(prev => prev ? { ...prev, ...data } : null);
@@ -63,29 +86,24 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
     }
   };
 
-  // Helper function to get user-specific storage keys (for backward compatibility)
+  // Get a storage key prefixed with the user ID for localStorage
   const getUserStorageKey = (key: string): string => {
-    if (!currentUser) {
-      return key;
-    }
-    return `${key}_${currentUser.uid}`;
+    const prefix = currentUser ? `user_${currentUser.uid}` : 'anonymous';
+    return `${prefix}_${key}`;
   };
 
   return (
-    <UserContext.Provider
-      value={{
-        userData,
-        loading,
-        updateUserData,
-        getUserStorageKey,
-      }}
-    >
+    <UserContext.Provider value={{
+      userData,
+      loading,
+      updateUserData,
+      getUserStorageKey
+    }}>
       {children}
     </UserContext.Provider>
   );
 };
 
-// Custom hook to use the user context
 export const useUser = (): UserContextType => {
   const context = useContext(UserContext);
   if (context === undefined) {

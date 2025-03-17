@@ -4,7 +4,7 @@ import Todo from '../Todo/Todo';
 import Notes from '../Notes/Notes';
 import Pomodoro from '../Pomodoro/Pomodoro';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { useHabits } from '../../contexts/HabitsContext';
+import { useHabits } from '../../contexts';
 import { Link } from 'react-router-dom';
 
 const Dashboard: React.FC = () => {

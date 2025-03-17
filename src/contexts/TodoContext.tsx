@@ -11,16 +11,24 @@ import {
   serverTimestamp,
   Timestamp,
   query,
-  orderBy
+  orderBy,
+  getDoc,
+  where,
+  DocumentData
 } from 'firebase/firestore';
-import { db } from '../firebase/firebase';
+import { db } from '../firebase/initialize';
 
 export interface TodoItem {
   id: string;
-  text: string;
+  title: string;
+  description: string;
   completed: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+  priority: 'low' | 'medium' | 'high';
+  dueDate: string | null;
+  tags: string[];
+  userId: string;
+  createdAt: any;
+  updatedAt: any;
 }
 
 interface TodoContextType {
@@ -40,74 +48,83 @@ interface TodoProviderProps {
 export const TodoProvider: React.FC<TodoProviderProps> = ({ children }) => {
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { currentUser } = useAuth();
   const { getUserStorageKey } = useUser();
 
-  // Convert Firestore data to TodoItem
-  const convertFirestoreTodoToTodo = (data: any): TodoItem => {
+  // Function to convert Firestore data to TodoItem
+  const convertFirestoreTodoToTodo = (data: DocumentData & { id: string }): TodoItem => {
     return {
-      ...data,
-      createdAt: data.createdAt instanceof Timestamp 
-        ? data.createdAt.toDate() 
-        : new Date(data.createdAt),
-      updatedAt: data.updatedAt instanceof Timestamp 
-        ? data.updatedAt.toDate() 
-        : new Date(data.updatedAt || data.createdAt)
+      id: data.id,
+      title: data.title || '',
+      description: data.description || '',
+      completed: data.completed || false,
+      priority: data.priority || 'medium',
+      dueDate: data.dueDate || null,
+      tags: data.tags || [],
+      userId: data.userId || '',
+      createdAt: data.createdAt ? new Date(data.createdAt.seconds * 1000) : new Date(),
+      updatedAt: data.updatedAt ? new Date(data.updatedAt.seconds * 1000) : new Date(),
     };
   };
 
   // Load todos from Firestore when user changes
   useEffect(() => {
-    if (!currentUser) {
-      setTodos([]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-
-    // Create a reference to the user's todos collection
-    const todosRef = collection(db, 'users', currentUser.uid, 'todos');
-    
-    // Create a query to order todos by creation date
-    const todosQuery = query(todosRef, orderBy('createdAt', 'desc'));
-    
-    // Set up real-time listener
-    const unsubscribe = onSnapshot(todosQuery, (snapshot) => {
-      const todosData: TodoItem[] = [];
-      snapshot.forEach((doc) => {
-        const todoData = doc.data();
-        todosData.push(convertFirestoreTodoToTodo({
-          id: doc.id,
-          ...todoData
-        }));
-      });
-      setTodos(todosData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error loading todos from Firestore:", error);
-      
-      // Fallback to localStorage if Firestore fails
-      const savedTodos = localStorage.getItem(getUserStorageKey('todos'));
-      if (savedTodos) {
-        try {
-          const parsedTodos = JSON.parse(savedTodos);
-          // Add createdAt and updatedAt if they don't exist
-          const todosWithDates = parsedTodos.map((todo: any) => ({
-            ...todo,
-            id: todo.id.toString(), // Convert number id to string
-            createdAt: todo.createdAt ? new Date(todo.createdAt) : new Date(),
-            updatedAt: todo.updatedAt ? new Date(todo.updatedAt) : new Date()
-          }));
-          setTodos(todosWithDates);
-        } catch (e) {
-          console.error("Error parsing todos from localStorage:", e);
-        }
+    const fetchTodos = async () => {
+      if (!currentUser) {
+        setTodos([]);
+        setLoading(false);
+        return;
       }
-      setLoading(false);
-    });
 
-    return () => unsubscribe();
+      try {
+        setLoading(true);
+        
+        // Reference to the user's todos collection
+        const todosRef = collection(db, 'users', currentUser.uid, 'todos');
+        const q = query(todosRef, orderBy('createdAt', 'desc'));
+        
+        // Set up a snapshot listener for real-time updates
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const todoData: TodoItem[] = [];
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            todoData.push(convertFirestoreTodoToTodo({
+              id: doc.id,
+              ...data
+            }));
+          });
+          
+          setTodos(todoData);
+          setLoading(false);
+          
+          // Save to localStorage as backup
+          localStorage.setItem(getUserStorageKey('todos'), JSON.stringify(todoData));
+        }, (error) => {
+          console.error("Error fetching todos:", error);
+          setError("Failed to fetch todos. Please try again later.");
+          setLoading(false);
+          
+          // Try to load from localStorage if available
+          const savedTodos = localStorage.getItem(getUserStorageKey('todos'));
+          if (savedTodos) {
+            try {
+              setTodos(JSON.parse(savedTodos));
+            } catch (e) {
+              console.error("Error parsing todos from localStorage:", e);
+            }
+          }
+        });
+        
+        return () => unsubscribe();
+      } catch (error) {
+        console.error("Error setting up todos listener:", error);
+        setLoading(false);
+        return () => {};
+      }
+    };
+    
+    fetchTodos();
   }, [currentUser, getUserStorageKey]);
 
   // Save todos to localStorage as backup
@@ -128,8 +145,13 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({ children }) => {
       const now = new Date();
       const newTodo: TodoItem = {
         id: newTodoRef.id,
-        text: text.trim(),
+        title: text.trim(),
+        description: '',
         completed: false,
+        priority: 'medium',
+        dueDate: null,
+        tags: [],
+        userId: currentUser.uid,
         createdAt: now,
         updatedAt: now
       };
@@ -148,8 +170,13 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({ children }) => {
       // Fallback to local state only if Firestore fails
       const newTodo: TodoItem = {
         id: Date.now().toString(),
-        text: text.trim(),
+        title: text.trim(),
+        description: '',
         completed: false,
+        priority: 'medium',
+        dueDate: null,
+        tags: [],
+        userId: currentUser.uid,
         createdAt: new Date(),
         updatedAt: new Date()
       };

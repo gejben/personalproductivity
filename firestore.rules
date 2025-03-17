@@ -22,5 +22,15 @@ service cloud.firestore {
       // Allow read/write access to own user collections
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+    
+    // Default categories collection - secured access
+    match /defaultCategories/{categoryId} {
+      // Allow read access for all authenticated users
+      allow read: if request.auth != null;
+      
+      // Only allow write access for admin users or through admin-controlled functions
+      // For now, we'll restrict writes completely and use the admin SDK or Cloud Functions
+      allow write: if false;
+    }
   }
 }
