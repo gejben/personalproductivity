@@ -7,6 +7,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
     
+    // Projects collection rules
+    match /projects/{projectId} {
+      allow read: if request.auth != null && (
+        resource.data.ownerId == request.auth.uid || 
+        request.auth.uid in resource.data.sharedWith
+      );
+      allow create: if request.auth != null && 
+                    request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if request.auth != null && 
+                            resource.data.ownerId == request.auth.uid;
+    }
+    
     // User data rules
     match /users/{userId} {
       // Allow read/write access to own user document
@@ -15,6 +27,11 @@ service cloud.firestore {
       // Allow read access to public user data
       allow read: if request.auth != null && 
                    resource.data.public == true;
+                   
+      // Notes collection rules
+      match /notes/{noteId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
     
     // User data collections
@@ -31,6 +48,43 @@ service cloud.firestore {
       // Only allow write access for admin users or through admin-controlled functions
       // For now, we'll restrict writes completely and use the admin SDK or Cloud Functions
       allow write: if false;
+    }
+
+    // Checklists collection rules
+    match /checklists/{checklistId} {
+      // Allow read access if the user is the owner or in the sharedWith array
+      allow read: if request.auth != null && 
+                   (resource.data.ownerId == request.auth.uid || 
+                    request.auth.uid in resource.data.sharedWith);
+      
+      // Allow write access if the user is the owner
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && 
+                            resource.data.ownerId == request.auth.uid;
+      
+      // Allow updating sharedWith array if the user is the owner
+      allow update: if request.auth != null && 
+                    resource.data.ownerId == request.auth.uid &&
+                    request.resource.data.diff(resource.data).affectedKeys()
+                      .hasOnly(['sharedWith']);
+    }
+
+    // Checklist Invitations collection rules
+    match /checklistInvitations/{invitationId} {
+      // Allow read access if the user is the recipient
+      allow read: if request.auth != null && 
+                   resource.data.userId == request.auth.uid;
+      
+      // Allow create if the user is the checklist owner
+      allow create: if request.auth != null && 
+                    exists(/databases/$(database)/documents/checklists/$(resource.data.checklistId)) &&
+                    get(/databases/$(database)/documents/checklists/$(resource.data.checklistId)).data.ownerId == request.auth.uid;
+      
+      // Allow update if the user is the recipient
+      allow update: if request.auth != null && 
+                    resource.data.userId == request.auth.uid &&
+                    request.resource.data.diff(resource.data).affectedKeys()
+                      .hasOnly(['status']);
     }
   }
 }

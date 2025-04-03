@@ -1,8 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNotes, Note } from '../../contexts/NotesContext';
 import './Notes.css';
+import { useTheme } from '@mui/material/styles';
+import { Box, TextField, Button, List, ListItem, ListItemText, IconButton } from '@mui/material';
+import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { CircularProgress } from '@mui/material';
 
-const Notes: React.FC = () => {
+interface NotesProps {
+  compact?: boolean;
+}
+
+const Notes: React.FC<NotesProps> = ({ compact = false }) => {
   const { 
     notes, 
     loading,
@@ -17,6 +25,8 @@ const Notes: React.FC = () => {
   const [content, setContent] = useState('');
   const [showSidebar, setShowSidebar] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [newNote, setNewNote] = useState('');
+  const theme = useTheme();
 
   // Check if we're on a mobile device
   useEffect(() => {
@@ -103,10 +113,14 @@ const Notes: React.FC = () => {
     }
   };
 
-  const handleCreateNote = () => {
-    createNote();
-    // The new note will be added to the notes array via the Firestore listener
-    // We'll select it in the next render cycle via the useEffect
+  const handleAddNote = async () => {
+    if (newNote.trim()) {
+      const note = await createNote();
+      if (note?.id) {
+        await updateNoteContent(note.id, newNote.trim());
+      }
+      setNewNote('');
+    }
   };
 
   const handleDeleteNote = (id: string) => {
@@ -130,6 +144,17 @@ const Notes: React.FC = () => {
     });
   };
 
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleAddNote();
+    }
+  };
+
+  if (loading) {
+    return <CircularProgress />;
+  }
+
   return (
     <div className="notes-container">
       {isMobile && (
@@ -140,7 +165,7 @@ const Notes: React.FC = () => {
           {!showSidebar && activeNote && (
             <span>{activeNote.title || 'Untitled Note'}</span>
           )}
-          <button onClick={handleCreateNote}>New Note</button>
+          <button onClick={handleAddNote}>New Note</button>
         </div>
       )}
       
@@ -149,7 +174,7 @@ const Notes: React.FC = () => {
           {!isMobile && (
             <div className="notes-header">
               <h2>Notes</h2>
-              <button onClick={handleCreateNote}>New Note</button>
+              <button onClick={handleAddNote}>New Note</button>
             </div>
           )}
           <div className="notes-list">
@@ -213,6 +238,56 @@ const Notes: React.FC = () => {
           )}
         </div>
       )}
+
+      <Box sx={{ width: '100%' }}>
+        <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+          <TextField
+            size={compact ? "small" : "medium"}
+            fullWidth
+            multiline
+            maxRows={3}
+            value={newNote}
+            onChange={(e) => setNewNote(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Write a note..."
+            variant="outlined"
+          />
+          <Button
+            variant="contained"
+            onClick={handleAddNote}
+            size={compact ? "small" : "medium"}
+          >
+            <AddIcon />
+          </Button>
+        </Box>
+
+        <List dense={compact}>
+          {notes.map((note) => (
+            <ListItem
+              key={note.id}
+              secondaryAction={
+                <IconButton 
+                  edge="end" 
+                  onClick={() => deleteNote(note.id)}
+                  size={compact ? "small" : "medium"}
+                >
+                  <DeleteIcon />
+                </IconButton>
+              }
+            >
+              <ListItemText
+                primary={note.content}
+                secondary={compact ? null : new Date(note.createdAt).toLocaleDateString()}
+                primaryTypographyProps={{
+                  style: {
+                    whiteSpace: 'pre-wrap',
+                  },
+                }}
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
     </div>
   );
 };

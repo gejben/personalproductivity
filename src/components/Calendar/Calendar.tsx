@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import ApiCalendar from 'react-google-calendar-api';
 import {
   Box,
   Typography,
@@ -39,19 +38,19 @@ import {
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DateTimePicker } from '@mui/x-date-pickers';
 
+// Add type declarations for gapi
+declare global {
+  interface Window {
+    gapi: any;
+    google: any;
+  }
+}
+
 // Google Calendar API configuration
-const config = {
-  clientId: process.env.REACT_APP_GOOGLE_CLIENT_ID || '',
-  apiKey: process.env.REACT_APP_GOOGLE_API_KEY || '',
-  scope: "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events",
-  discoveryDocs: [
-    "https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest",
-  ],
-  immediateAuth: false,
-  prompt: 'consent',
-  ux_mode: 'popup',
-  redirect_uri: window.location.origin + '/calendar'
-};
+const CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
+const API_KEY = process.env.REACT_APP_GOOGLE_API_KEY || '';
+const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
+const SCOPES = 'https://www.googleapis.com/auth/calendar';
 
 // Check if API credentials are set
 const areCredentialsSet = 
@@ -60,8 +59,8 @@ const areCredentialsSet =
   process.env.REACT_APP_GOOGLE_CLIENT_ID !== '' &&
   process.env.REACT_APP_GOOGLE_API_KEY !== '';
 
-// Create ApiCalendar instance
-const apiCalendar = new ApiCalendar(config);
+// Token storage key
+const TOKEN_KEY = 'google_calendar_token';
 
 interface CalendarEvent {
   id: string;
@@ -89,7 +88,8 @@ const Calendar: React.FC = () => {
   const [showAddEventForm, setShowAddEventForm] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [credentialsError] = useState<boolean>(!areCredentialsSet);
-  const [autoAuthChecked, setAutoAuthChecked] = useState<boolean>(false);
+  const [gapiInited, setGapiInited] = useState<boolean>(false);
+  const [tokenClient, setTokenClient] = useState<any>(null);
   
   // Form state for adding events
   const [formData, setFormData] = useState({
@@ -99,163 +99,202 @@ const Calendar: React.FC = () => {
     startDateTime: new Date(),
     endDateTime: new Date(new Date().getTime() + 60 * 60 * 1000),
   });
-  
-  // Handle Google Calendar sign-in
-  const handleSignInClick = () => {
-    setError(null);
-    
-    // Check if credentials are properly set
-    if (!process.env.REACT_APP_GOOGLE_CLIENT_ID || process.env.REACT_APP_GOOGLE_CLIENT_ID === '' || 
-        !process.env.REACT_APP_GOOGLE_API_KEY || process.env.REACT_APP_GOOGLE_API_KEY === '') {
-      setError('Google Calendar API credentials are not properly configured. Please check your .env file.');
-      return;
-    }
-    
-    // Force authentication with specific scopes
-    const handleAuth = async () => {
-      try {
-        await apiCalendar.handleAuthClick();
-        setIsCalendarSignedIn(true);
-        await fetchEvents();
-      } catch (error: any) {
-        if (error.status === 401 || (error.result && error.result.error && error.result.error.code === 401)) {
-          setError('Authentication failed. Please verify your Google Cloud Console settings and try again.');
-        } else if (error.error === 'popup_blocked_by_browser') {
-          setError('Authentication popup was blocked. Please allow popups for this site and try again.');
-        } else if (error.error === 'access_denied') {
-          if (error.message && error.message.includes('verifieringsprocess')) {
-            setError(
-              'This app is currently in testing mode. Please contact the developer to be added as a test user. ' +
-              'If you are the developer, make sure to add your email as a test user in the Google Cloud Console.'
-            );
-          } else {
-            setError('You denied access to your Google Calendar. Please try again and approve the permissions.');
-          }
-        } else if (error.error === 'redirect_uri_mismatch' || (error.message && error.message.includes('redirect_uri_mismatch'))) {
-          setError(
-            'Redirect URI mismatch error. Please verify that ' + config.redirect_uri + 
-            ' is added as an authorized redirect URI in your Google Cloud Console project.'
-          );
-        } else {
-          setError(`Failed to sign in to Google Calendar: ${error.message || 'Unknown error'}`);
+
+  // Check if token exists and is valid
+  const checkToken = useCallback(async () => {
+    try {
+      const token = window.gapi?.client?.getToken();
+      if (token) {
+        // Verify token is still valid
+        const response = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=' + token.access_token);
+        const data = await response.json();
+        
+        if (!data.error) {
+          setIsCalendarSignedIn(true);
+          return true;
         }
       }
-    };
-    
-    handleAuth();
-  };
-  
+      return false;
+    } catch (error) {
+      console.error('Error checking token:', error);
+      return false;
+    }
+  }, []);
+
   // Fetch events from Google Calendar
   const fetchEvents = useCallback(async () => {
-    if (!isCalendarSignedIn) return;
+    if (!isCalendarSignedIn || !window.gapi?.client?.calendar) return;
     
     setLoading(true);
     setError(null);
     
     try {
-      if (!apiCalendar.sign) {
-        setError('Session expired. Please sign in again.');
-        setIsCalendarSignedIn(false);
-        setLoading(false);
-        return;
-      }
-      
-      const calendarId = 'primary';
-      console.log('Fetching events for calendar:', calendarId);
-      
-      const result = await apiCalendar.listEvents({
-        calendarId: calendarId,
+      const response = await window.gapi.client.calendar.events.list({
+        calendarId: 'primary',
         timeMin: new Date().toISOString(),
         maxResults: 10,
         singleEvents: true,
         orderBy: 'startTime',
       });
-      
-      console.log('Events response:', result);
-      
-      if (result && result.result && result.result.items) {
-        console.log('Found events:', result.result.items.length);
-        setEvents(result.result.items);
-      } else {
-        console.log('No events found or invalid response format');
-        setEvents([]);
-      }
+
+      setEvents(response.result.items || []);
     } catch (error: any) {
       console.error('Error fetching events:', error);
-      console.error('Error details:', JSON.stringify(error, null, 2));
-      
-      // Handle authentication errors
-      if (error.status === 401 || (error.result && error.result.error && (error.result.error.status === 401 || error.result.error.status === 'UNAUTHENTICATED'))) {
-        setError('Authentication error. Please sign out and sign in again.');
+      if (error.status === 401) {
+        setError('Session expired. Please sign in again.');
         setIsCalendarSignedIn(false);
-      } else if (error.status === 404) {
-        setError('Calendar not found. Make sure you have access to the calendar and the Google Calendar API is enabled.');
       } else {
-        setError(`Failed to fetch events: ${error.message || 'Unknown error'}`);
+        setError(error.message || 'Failed to fetch events');
       }
     } finally {
       setLoading(false);
     }
   }, [isCalendarSignedIn]);
-  
-  // Function to check if user is authorized and automatically trigger auth flow if needed
-  const checkAndTriggerAuth = useCallback(async () => {
-    if (credentialsError || autoAuthChecked || !areCredentialsSet) return;
+
+  // Handle token response
+  const handleTokenResponse = useCallback((response: any) => {
+    if (response.error) {
+      setError(`Authentication failed: ${response.error}`);
+      setIsCalendarSignedIn(false);
+    } else {
+      setIsCalendarSignedIn(true);
+      fetchEvents();
+    }
+    setLoading(false);
+  }, [fetchEvents]);
+
+  // Initialize the Google API client
+  const initializeGapiClient = useCallback(async () => {
+    if (!window.gapi) return;
     
     try {
-      console.log('Checking if calendar authorization is needed...');
-      // First check if we're already authenticated
-      const signedIn = apiCalendar.sign;
-      console.log('Google Calendar sign status:', signedIn);
+      await window.gapi.client.init({
+        apiKey: API_KEY,
+        discoveryDocs: [DISCOVERY_DOC],
+      });
+      setGapiInited(true);
       
-      if (signedIn) {
-        console.log('Already authenticated with Google Calendar, fetching events...');
-        setIsCalendarSignedIn(true);
+      // Check if we have a valid token
+      const hasValidToken = await checkToken();
+      if (hasValidToken) {
         await fetchEvents();
-        return;
-      }
-      
-      // If we're not authenticated but the user is logged into the app,
-      // automatically trigger the auth flow
-      if (auth.currentUser && !isCalendarSignedIn) {
-        console.log('User is logged into the app but not Google Calendar, triggering auth flow...');
-        // Set a slight delay to ensure UI is fully rendered
-        setTimeout(() => {
-          handleSignInClick();
-        }, 1000);
-      } else {
-        console.log('User is not signed in to Google Calendar.');
-        setIsCalendarSignedIn(false);
       }
     } catch (error) {
-      console.error('Error checking auth status:', error);
-      setIsCalendarSignedIn(false);
-    } finally {
-      setAutoAuthChecked(true);
-      setLoading(false);
+      console.error('Error initializing GAPI client:', error);
+      setError('Failed to initialize Google Calendar. Please try again.');
     }
-  }, [auth.currentUser, isCalendarSignedIn, credentialsError, autoAuthChecked, areCredentialsSet, fetchEvents]);
-  
-  // Check for existing authentication on component mount and trigger flow if needed
+  }, [checkToken, fetchEvents]);
+
+  // Load the Google API client library
   useEffect(() => {
-    if (areCredentialsSet) {
-      checkAndTriggerAuth();
-    } else {
-      console.warn('Google Calendar API credentials are not properly configured.');
+    // Check if GAPI is already loaded
+    if (window.gapi?.client) {
+      setGapiInited(true);
+      checkToken();
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://apis.google.com/js/api.js';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      window.gapi.load('client', initializeGapiClient);
+    };
+    document.head.appendChild(script);
+
+    return () => {
+      const scriptElement = document.querySelector('script[src="https://apis.google.com/js/api.js"]');
+      if (scriptElement && scriptElement.parentNode) {
+        scriptElement.parentNode.removeChild(scriptElement);
+      }
+    };
+  }, [initializeGapiClient, checkToken]);
+
+  // Load the Google Identity Services library
+  useEffect(() => {
+    // Check if Google Identity Services is already loaded
+    if (window.google?.accounts?.oauth2) {
+      const client = window.google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: handleTokenResponse,
+        prompt: 'consent',
+        ux_mode: 'redirect',
+        access_type: 'offline',
+        include_granted_scopes: true
+      });
+      setTokenClient(client);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      const client = window.google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: handleTokenResponse,
+        prompt: 'consent',
+        ux_mode: 'redirect',
+        access_type: 'offline',
+        include_granted_scopes: true
+      });
+      setTokenClient(client);
+    };
+    document.head.appendChild(script);
+
+    return () => {
+      const scriptElement = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+      if (scriptElement && scriptElement.parentNode) {
+        scriptElement.parentNode.removeChild(scriptElement);
+      }
+    };
+  }, [handleTokenResponse]);
+
+  // Handle Google Calendar sign-in
+  const handleSignInClick = () => {
+    setError(null);
+    setLoading(true);
+    
+    if (!areCredentialsSet) {
+      setError('Google Calendar API credentials are not properly configured.');
+      setLoading(false);
+      return;
+    }
+
+    if (!gapiInited || !tokenClient) {
+      setError('Google Calendar API is not initialized. Please try again in a moment.');
+      setLoading(false);
+      return;
+    }
+
+    // Request an access token and trigger the popup
+    try {
+      tokenClient.requestAccessToken();  // Remove prompt option to use default from initialization
+    } catch (error) {
+      console.error('Error requesting access token:', error);
+      setError('Failed to open authentication popup. Please allow popups for this site.');
       setLoading(false);
     }
-  }, [checkAndTriggerAuth, areCredentialsSet]);
+  };
 
   // Handle Google Calendar sign-out
   const handleSignOutClick = () => {
-    apiCalendar.handleSignoutClick();
+    const token = window.gapi.client.getToken();
+    if (token) {
+      window.google.accounts.oauth2.revoke(token.access_token);
+      window.gapi.client.setToken(null);
+    }
     setIsCalendarSignedIn(false);
     setEvents([]);
   };
-  
+
   // Add event to Google Calendar
   const addEvent = async () => {
-    if (!isCalendarSignedIn) return;
+    if (!isCalendarSignedIn || !window.gapi?.client?.calendar) return;
     
     setLoading(true);
     setError(null);
@@ -275,30 +314,36 @@ const Calendar: React.FC = () => {
     };
     
     try {
-      await apiCalendar.createEvent(event);
+      await window.gapi.client.calendar.events.insert({
+        calendarId: 'primary',
+        resource: event,
+      });
       setShowAddEventForm(false);
       resetFormData();
       fetchEvents();
     } catch (error: any) {
       console.error('Error adding event:', error);
-      setError('Failed to add event. Please try again.');
+      setError(error.message || 'Failed to add event');
       setLoading(false);
     }
   };
 
   // Delete event from Google Calendar
   const deleteEvent = async (eventId: string) => {
-    if (!isCalendarSignedIn) return;
+    if (!isCalendarSignedIn || !window.gapi?.client?.calendar) return;
     
     setLoading(true);
     setError(null);
     
     try {
-      await apiCalendar.deleteEvent(eventId);
+      await window.gapi.client.calendar.events.delete({
+        calendarId: 'primary',
+        eventId: eventId,
+      });
       fetchEvents();
     } catch (error: any) {
       console.error('Error deleting event:', error);
-      setError('Failed to delete event. Please try again.');
+      setError(error.message || 'Failed to delete event');
       setLoading(false);
     }
   };
@@ -473,12 +518,13 @@ const Calendar: React.FC = () => {
             color="primary"
             onClick={handleSignInClick}
             startIcon={<EventIcon />}
+            disabled={!gapiInited || !tokenClient}
           >
             Sign in to Google Calendar
           </Button>
         </Box>
       ) : (
-        <>
+        <Box component="div">
           <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               <Button
@@ -514,14 +560,14 @@ const Calendar: React.FC = () => {
               <CircularProgress />
             </Box>
           ) : events.length === 0 ? (
-            <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'background.default' }}>
-              <Typography variant="h6" color="text.secondary">
+            <Box component="div" sx={{ p: 3, textAlign: 'center', bgcolor: 'background.default' }}>
+              <Typography component="div" variant="h6" color="text.secondary">
                 No events found
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              <Typography component="div" variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                 Click "Add Event" to create your first event
               </Typography>
-            </Paper>
+            </Box>
           ) : (
             <List>
               {events.map((event) => (
@@ -538,33 +584,35 @@ const Calendar: React.FC = () => {
                       </IconButton>
                     }
                   >
-                    <ListItemText
-                      primary={event.summary}
-                      secondary={
-                        <>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography component="div" variant="body1">
+                        {event.summary}
+                      </Typography>
+                      <Box sx={{ mt: 0.5 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Typography component="span" variant="body2" color="text.primary">
                             {formatDate(event.start.dateTime)}
                           </Typography>
                           {event.location && (
                             <Typography component="span" variant="body2" color="text.secondary">
-                              {' • '}{event.location}
+                              • {event.location}
                             </Typography>
                           )}
-                          {event.description && (
-                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                              {event.description}
-                            </Typography>
-                          )}
-                        </>
-                      }
-                    />
+                        </Box>
+                        {event.description && (
+                          <Typography component="div" variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            {event.description}
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
                   </ListItem>
                   <Divider />
                 </React.Fragment>
               ))}
             </List>
           )}
-        </>
+        </Box>
       )}
 
       {renderAddEventForm()}

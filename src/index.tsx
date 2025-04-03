@@ -18,14 +18,16 @@ import './firebase/initialize';
 // Create a custom Material UI theme
 const theme = createTheme({
   palette: {
+    mode: 'dark',
     primary: {
-      main: '#3f51b5',
+      main: '#90caf9',
     },
     secondary: {
-      main: '#f50057',
+      main: '#ce93d8',
     },
     background: {
-      default: '#f5f5f5',
+      default: '#121212',
+      paper: '#1e1e1e',
     },
   },
   typography: {

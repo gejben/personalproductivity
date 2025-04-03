@@ -85,6 +85,7 @@ interface HabitsContextType {
   getStreak: (habit: Habit) => number;
   isHabitCompletedOnDate: (habit: Habit, date: string) => boolean;
   getCategoryById: (categoryId: string) => HabitCategory | undefined;
+  getHabitById: (id: string) => Habit | undefined;
 }
 
 // Create the context
@@ -193,17 +194,27 @@ export const HabitsProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           });
         });
         
-        // Combine with default categories that have isDefault flag
-        const defaultCategories = categories.filter(c => c.isDefault);
-        
-        // Merge, giving priority to user categories if there's a name conflict
-        const userCategoryNames = userCategories.map(c => c.name.toLowerCase());
-        const filteredDefaults = defaultCategories.filter(
-          c => !userCategoryNames.includes(c.name.toLowerCase())
-        );
-        
-        setCategories([...userCategories, ...filteredDefaults]);
-        setCategoriesLoading(false);
+        // Get default categories from current state
+        const defaultCategoriesRef = collection(firestore, 'defaultCategories');
+        getDocs(defaultCategoriesRef).then(defaultSnapshot => {
+          const defaultCategories: HabitCategory[] = [];
+          defaultSnapshot.forEach((doc) => {
+            defaultCategories.push({
+              id: doc.id,
+              ...doc.data() as Omit<HabitCategory, 'id'>,
+              isDefault: true
+            });
+          });
+          
+          // Merge, giving priority to user categories if there's a name conflict
+          const userCategoryNames = userCategories.map(c => c.name.toLowerCase());
+          const filteredDefaults = defaultCategories.filter(
+            c => !userCategoryNames.includes(c.name.toLowerCase())
+          );
+          
+          setCategories([...userCategories, ...filteredDefaults]);
+          setCategoriesLoading(false);
+        });
       }, (error) => {
         console.error("Error loading categories from Firestore:", error);
         setCategoriesLoading(false);
@@ -214,7 +225,7 @@ export const HabitsProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       console.error("Error setting up categories listener:", error);
       setCategoriesLoading(false);
     }
-  }, [currentUser, getUserStorageKey, categories, db]);
+  }, [currentUser, getUserStorageKey, db]);
 
   // Load habits from Firestore
   useEffect(() => {
@@ -646,6 +657,11 @@ export const HabitsProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     return categories.find(category => category.id === categoryId);
   };
 
+  // Get habit by ID
+  const getHabitById = (id: string): Habit | undefined => {
+    return habits.find(habit => habit.id === id);
+  };
+
   // Prepare the context value
   const contextValue: HabitsContextType = {
     habits,
@@ -667,7 +683,8 @@ export const HabitsProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     getCompletionRate,
     getStreak,
     isHabitCompletedOnDate,
-    getCategoryById
+    getCategoryById,
+    getHabitById
   };
 
   return (

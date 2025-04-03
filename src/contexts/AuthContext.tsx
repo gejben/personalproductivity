@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from 'firebase/auth';
+import { User, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase/initialize';
 
 interface AuthContextType {
@@ -8,6 +8,9 @@ interface AuthContextType {
   signIn: () => Promise<User | null>;
   logOut: () => Promise<void>;
   isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  register: (email: string, password: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -51,12 +54,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  // Login function
+  const login = async (email: string, password: string) => {
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      setCurrentUser(userCredential.user);
+    } catch (error) {
+      console.error('Error logging in:', error);
+      throw error;
+    }
+  };
+
+  // Logout function
+  const logout = async () => {
+    try {
+      await firebaseSignOut(auth);
+      setCurrentUser(null);
+    } catch (error) {
+      console.error('Error logging out:', error);
+      throw error;
+    }
+  };
+
+  // Register function
+  const register = async (email: string, password: string) => {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      setCurrentUser(userCredential.user);
+    } catch (error) {
+      console.error('Error registering user:', error);
+      throw error;
+    }
+  };
+
   const value = {
     currentUser,
     loading,
     signIn,
     logOut,
-    isAuthenticated: !!currentUser
+    isAuthenticated: !!currentUser,
+    login,
+    logout,
+    register
   };
 
   return (

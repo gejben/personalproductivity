@@ -50,16 +50,23 @@ export const PomodoroProvider: React.FC<PomodoroProviderProps> = ({ children }) 
     localStorage.setItem(getUserStorageKey('pomodoro_cycles'), cycles.toString());
   }, [cycles, getUserStorageKey]);
 
-  // Reset timer when mode changes
-  useEffect(() => {
-    setMinutes(modes[mode].minutes);
+  const resetTimerToMode = useCallback((newMode: TimerMode) => {
+    setMinutes(modes[newMode].minutes);
     setSeconds(0);
     setIsActive(false);
-    document.documentElement.style.setProperty('--timer-color', modes[mode].color);
-  }, [mode, modes]);
+    document.documentElement.style.setProperty('--timer-color', modes[newMode].color);
+  }, [modes]);
+
+  // Reset timer when mode changes
+  useEffect(() => {
+    resetTimerToMode(mode);
+  }, [mode, resetTimerToMode]);
 
   // Handle timer completion
   const handleTimerComplete = useCallback(() => {
+    const audio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-alarm-digital-clock-beep-989.mp3');
+    audio.play();
+
     if (mode === 'work') {
       const newCycles = cycles + 1;
       setCycles(newCycles);
@@ -79,25 +86,22 @@ export const PomodoroProvider: React.FC<PomodoroProviderProps> = ({ children }) 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
 
-    if (isActive) {
+    if (isActive && (minutes > 0 || seconds > 0)) {
       interval = setInterval(() => {
         if (seconds === 0) {
           if (minutes === 0) {
             // Timer completed
             clearInterval(interval as NodeJS.Timeout);
             setIsActive(false);
-            playAlarm();
             handleTimerComplete();
           } else {
-            setMinutes(minutes - 1);
+            setMinutes(prev => prev - 1);
             setSeconds(59);
           }
         } else {
-          setSeconds(seconds - 1);
+          setSeconds(prev => prev - 1);
         }
       }, 1000);
-    } else if (interval) {
-      clearInterval(interval);
     }
 
     return () => {
@@ -105,52 +109,55 @@ export const PomodoroProvider: React.FC<PomodoroProviderProps> = ({ children }) 
     };
   }, [isActive, minutes, seconds, handleTimerComplete]);
 
-  const toggleTimer = () => {
-    setIsActive(!isActive);
-  };
+  const toggleTimer = useCallback(() => {
+    setIsActive(prev => !prev);
+  }, []);
 
-  const resetTimer = () => {
+  const resetTimer = useCallback(() => {
     setIsActive(false);
-    setMinutes(modes[mode].minutes);
-    setSeconds(0);
-  };
+    resetTimerToMode(mode);
+  }, [mode, resetTimerToMode]);
 
-  const changeMode = (newMode: TimerMode) => {
+  const changeMode = useCallback((newMode: TimerMode) => {
     setMode(newMode);
-  };
+  }, []);
 
-  const playAlarm = () => {
-    // Play a sound when timer completes
-    const audio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-alarm-digital-clock-beep-989.mp3');
-    audio.play();
-  };
-
-  // Format time to display
-  const formatTime = () => {
+  const formatTime = useCallback(() => {
     const formattedMinutes = minutes < 10 ? `0${minutes}` : minutes;
     const formattedSeconds = seconds < 10 ? `0${seconds}` : seconds;
     return `${formattedMinutes}:${formattedSeconds}`;
-  };
+  }, [minutes, seconds]);
 
-  const getModeLabel = (modeType: TimerMode) => {
+  const getModeLabel = useCallback((modeType: TimerMode) => {
     return modes[modeType].label;
-  };
+  }, [modes]);
+
+  const value = useMemo(() => ({
+    minutes,
+    seconds,
+    isActive,
+    mode,
+    cycles,
+    toggleTimer,
+    resetTimer,
+    changeMode,
+    formatTime,
+    getModeLabel,
+  }), [
+    minutes,
+    seconds,
+    isActive,
+    mode,
+    cycles,
+    toggleTimer,
+    resetTimer,
+    changeMode,
+    formatTime,
+    getModeLabel,
+  ]);
 
   return (
-    <PomodoroContext.Provider
-      value={{
-        minutes,
-        seconds,
-        isActive,
-        mode,
-        cycles,
-        toggleTimer,
-        resetTimer,
-        changeMode,
-        formatTime,
-        getModeLabel,
-      }}
-    >
+    <PomodoroContext.Provider value={value}>
       {children}
     </PomodoroContext.Provider>
   );

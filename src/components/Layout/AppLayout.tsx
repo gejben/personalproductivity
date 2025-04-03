@@ -29,7 +29,9 @@ import {
   Repeat as HabitsIcon,
   CalendarMonth as CalendarIcon,
   Settings as SettingsIcon,
-  Logout as LogoutIcon
+  Logout as LogoutIcon,
+  List as ListIcon,
+  Work as ProjectIcon
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -57,7 +59,9 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
+    { text: 'Projects', icon: <ProjectIcon />, path: '/projects' },
     { text: 'Todo', icon: <TodoIcon />, path: '/todo' },
+    { text: 'Checklists', icon: <ListIcon />, path: '/checklists' },
     { text: 'Notes', icon: <NoteIcon />, path: '/notes' },
     { text: 'Pomodoro', icon: <PomodoroIcon />, path: '/pomodoro' },
     { text: 'Habits', icon: <HabitsIcon />, path: '/habits' },

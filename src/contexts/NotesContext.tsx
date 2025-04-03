@@ -26,10 +26,10 @@ export interface Note {
 interface NotesContextType {
   notes: Note[];
   loading: boolean;
-  createNote: () => void;
-  updateNoteTitle: (id: string, title: string) => void;
-  updateNoteContent: (id: string, content: string) => void;
-  deleteNote: (id: string) => void;
+  createNote: () => Promise<Note>;
+  updateNoteTitle: (id: string, title: string) => Promise<void>;
+  updateNoteContent: (id: string, content: string) => Promise<void>;
+  deleteNote: (id: string) => Promise<void>;
 }
 
 const NotesContext = createContext<NotesContextType | undefined>(undefined);
@@ -127,44 +127,26 @@ export const NotesProvider: React.FC<NotesProviderProps> = ({ children }) => {
     }
   }, [notes, getUserStorageKey]);
 
-  const createNote = async () => {
-    if (!currentUser) return;
+  const createNote = async (): Promise<Note> => {
+    if (!currentUser) throw new Error('User must be authenticated to create notes');
+    
+    const notesRef = collection(db, 'users', currentUser.uid, 'notes');
+    const newNoteRef = doc(notesRef);
+    const newNote = {
+      id: newNoteRef.id,
+      title: '',
+      content: '',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    await setDoc(newNoteRef, {
+      ...newNote,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
 
-    try {
-      // Create a new document reference with auto-generated ID
-      const notesRef = collection(db, 'users', currentUser.uid, 'notes');
-      const newNoteRef = doc(notesRef);
-      
-      const now = new Date();
-      const newNote: Note = {
-        id: newNoteRef.id,
-        title: 'New Note',
-        content: '',
-        createdAt: now,
-        updatedAt: now
-      };
-
-      // Save to Firestore
-      await setDoc(newNoteRef, {
-        ...newNote,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-
-      // Update will be handled by onSnapshot listener
-    } catch (error) {
-      console.error("Error adding note to Firestore:", error);
-      
-      // Fallback to local state only if Firestore fails
-      const newNote: Note = {
-        id: Date.now().toString(),
-        title: 'New Note',
-        content: '',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-      setNotes([newNote, ...notes]);
-    }
+    return newNote;
   };
 
   const updateNoteTitle = async (id: string, title: string) => {

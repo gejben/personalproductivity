@@ -22,7 +22,11 @@ import {
 } from '@mui/material';
 import { Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
 
-const Todo: React.FC = () => {
+interface TodoProps {
+  compact?: boolean;
+}
+
+const Todo: React.FC<TodoProps> = ({ compact = false }) => {
   const { todos, loading, addTodo, toggleTodo, deleteTodo } = useTodo();
   const [inputValue, setInputValue] = useState('');
   const theme = useTheme();
@@ -33,9 +37,15 @@ const Todo: React.FC = () => {
   };
 
   const handleAddTodo = () => {
-    if (inputValue.trim() !== '') {
-      addTodo(inputValue);
+    if (inputValue.trim()) {
+      addTodo(inputValue.trim());
       setInputValue('');
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleAddTodo();
     }
   };
 
@@ -46,6 +56,10 @@ const Todo: React.FC = () => {
     });
   };
 
+  if (loading) {
+    return <CircularProgress />;
+  }
+
   return (
     <Card>
       <CardContent sx={{ p: isMobile ? 2 : 3 }}>
@@ -53,34 +67,22 @@ const Todo: React.FC = () => {
           Todo List
         </Typography>
         
-        <Box sx={{ 
-          mb: 3, 
-          display: 'flex', 
-          gap: 1,
-          flexDirection: isMobile ? 'column' : 'row'
-        }}>
+        <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
           <TextField
+            size={compact ? "small" : "medium"}
             fullWidth
-            variant="outlined"
-            size="small"
             value={inputValue}
             onChange={handleInputChange}
+            onKeyPress={handleKeyPress}
             placeholder="Add a new task..."
-            onKeyPress={(e) => e.key === 'Enter' && handleAddTodo()}
-            disabled={loading}
+            variant="outlined"
           />
-          <Button 
-            variant="contained" 
-            color="primary" 
+          <Button
+            variant="contained"
             onClick={handleAddTodo}
-            startIcon={<AddIcon />}
-            disabled={loading}
-            sx={{ 
-              width: isMobile ? '100%' : 'auto',
-              mt: isMobile ? 1 : 0
-            }}
+            size={compact ? "small" : "medium"}
           >
-            Add
+            <AddIcon />
           </Button>
         </Box>
         
@@ -93,76 +95,61 @@ const Todo: React.FC = () => {
             overflow: 'auto' 
           }}
         >
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-              <CircularProgress size={24} />
-            </Box>
-          ) : (
-            <List>
-              {todos.length === 0 ? (
-                <ListItem>
-                  <ListItemText 
-                    primary="No tasks yet" 
-                    secondary="Add a task to get started" 
-                    sx={{ textAlign: 'center', color: 'text.secondary' }}
-                  />
-                </ListItem>
-              ) : (
-                todos.map((todo) => (
-                  <ListItem
-                    key={todo.id}
-                    secondaryAction={
-                      <IconButton 
-                        edge="end" 
-                        aria-label="delete" 
-                        onClick={() => deleteTodo(todo.id)}
-                        color="error"
-                        sx={{ ml: isMobile ? 1 : 2 }}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    }
-                    disablePadding
-                    sx={{ mb: isMobile ? 1 : 0 }}
-                  >
-                    <ListItemButton 
-                      onClick={() => toggleTodo(todo.id)} 
-                      dense
-                      sx={{ 
-                        pr: isMobile ? 6 : 8,
-                        py: isMobile ? 1 : 'auto'
-                      }}
+          <List dense={compact}>
+            {todos.length === 0 ? (
+              <ListItem>
+                <ListItemText 
+                  primary="No tasks yet" 
+                  secondary="Add a task to get started" 
+                  sx={{ textAlign: 'center', color: 'text.secondary' }}
+                />
+              </ListItem>
+            ) : (
+              todos.map((todo) => (
+                <ListItem
+                  key={todo.id}
+                  secondaryAction={
+                    <IconButton 
+                      edge="end" 
+                      onClick={() => deleteTodo(todo.id)}
+                      size={compact ? "small" : "medium"}
                     >
-                      <ListItemIcon>
-                        <Checkbox
-                          edge="start"
-                          checked={todo.completed}
-                          tabIndex={-1}
-                          disableRipple
-                        />
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary={todo.title}
-                        secondary={formatDate(todo.createdAt)}
-                        primaryTypographyProps={{
-                          style: {
-                            textDecoration: todo.completed ? 'line-through' : 'none',
-                            color: todo.completed ? '#888' : 'inherit',
-                            fontSize: isMobile ? '0.9rem' : '1rem'
-                          }
-                        }}
-                        secondaryTypographyProps={{
-                          style: {
-                            fontSize: isMobile ? '0.7rem' : '0.8rem'
-                          }
-                        }}
+                      <DeleteIcon />
+                    </IconButton>
+                  }
+                  disablePadding
+                >
+                  <ListItemButton role={undefined} onClick={() => toggleTodo(todo.id)} dense>
+                    <ListItemIcon>
+                      <Checkbox
+                        edge="start"
+                        checked={todo.completed}
+                        tabIndex={-1}
+                        disableRipple
+                        size={compact ? "small" : "medium"}
                       />
-                    </ListItemButton>
-                  </ListItem>
-                ))
-              )}
-            </List>
-          )}
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary={todo.title}
+                      secondary={compact ? null : formatDate(todo.createdAt)}
+                      primaryTypographyProps={{
+                        style: {
+                          textDecoration: todo.completed ? 'line-through' : 'none',
+                          color: todo.completed ? '#888' : 'inherit',
+                          fontSize: isMobile ? '0.9rem' : '1rem'
+                        }
+                      }}
+                      secondaryTypographyProps={{
+                        style: {
+                          fontSize: isMobile ? '0.7rem' : '0.8rem'
+                        }
+                      }}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              ))
+            )}
+          </List>
         </Paper>
       </CardContent>
     </Card>
